@@ -1,0 +1,108 @@
+Modo AI Gateway — Non-Commercial Source-Available License (v1)
+
+Copyright © Modo. All rights reserved.
+
+
+1. DEFINITIONS
+
+   "Software" means the Modo AI Gateway source code, binaries, dashboard,
+   documentation and all other materials made available under this license.
+
+   "You" means the individual or legal entity exercising rights under this
+   license.
+
+   "Commercial Use" means any use of the Software that, directly or indirectly,
+   is intended for or directed toward commercial advantage or monetary
+   compensation. Commercial Use includes (but is not limited to):
+
+     (a) routing or processing traffic for paying customers, end-users, or
+         third parties of any for-profit entity;
+     (b) any deployment inside a for-profit organization that serves the
+         organization's business operations (whether or not directly revenue-
+         generating);
+     (c) hosting the Software as a service made available to other parties,
+         whether free of charge or paid;
+     (d) embedding, integrating, redistributing or sublicensing the Software,
+         in whole or in part, as part of a paid product or paid service;
+     (e) use by a contractor, consultancy or services firm on behalf of a
+         client for the client's commercial activities;
+     (f) any use intended to obtain a commercial advantage for You or a third
+         party.
+
+   "Non-Commercial Use" means use that is not Commercial Use, including:
+
+     (a) personal use by an individual for non-revenue purposes;
+     (b) academic and educational use, including coursework, research and
+         teaching;
+     (c) evaluation, experimentation and proof-of-concept work that does not
+         serve a commercial deployment;
+     (d) use by registered non-profit organizations, public benefit
+         organizations and government bodies for non-revenue programs;
+     (e) hobbyist and open-source project use that is not itself Commercial Use.
+
+
+2. GRANT — NON-COMMERCIAL USE
+
+   Subject to the terms of this license, Modo grants You a worldwide,
+   royalty-free, non-exclusive, non-transferable license to use, copy, modify,
+   and run the Software **for Non-Commercial Use only**, including the right to
+   make and run modified copies for Non-Commercial Use.
+
+   You may share modified or unmodified copies of the Software with others
+   provided that:
+
+     (a) every copy includes this LICENSE file unmodified;
+     (b) every copy continues to be used only for Non-Commercial Use; and
+     (c) You do not represent the Software as Your own original work.
+
+
+3. COMMERCIAL USE — SEPARATE LICENSE REQUIRED
+
+   COMMERCIAL USE IS PROHIBITED UNDER THIS LICENSE. To use the Software for any
+   Commercial Use, You must obtain a separate written commercial license from
+   Modo. To request a commercial license, contact us at the address listed at
+   https://the-modo.github.io/#contact.
+
+
+4. NO TRADEMARK LICENSE
+
+   This license does not grant You any rights to use the Modo name, the
+   "Modo AI Gateway" name, the Modo logo, or any related trademarks, except to
+   factually identify the Software. You may not represent any modified version
+   of the Software as an official Modo product.
+
+
+5. ATTRIBUTION
+
+   All copies and substantial portions of the Software must retain the
+   above copyright notice and this license text.
+
+
+6. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+
+7. LIMITATION OF LIABILITY
+
+   IN NO EVENT SHALL MODO OR THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+   CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT
+   OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+   USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+8. TERMINATION
+
+   If You breach this license — including by engaging in Commercial Use without
+   a separate commercial license — Your rights under this license terminate
+   automatically. Upon termination You must cease all use of the Software and
+   destroy all copies in Your possession.
+
+
+9. ENTIRE AGREEMENT
+
+   This license constitutes the entire agreement between the parties with
+   respect to non-commercial use of the Software. Any commercial license is
+   governed by a separate written agreement.
