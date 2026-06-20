@@ -1,0 +1,16 @@
+[package]
+name = "gateway-storage"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+gateway-config = { path = "../gateway-config" }
+
+sqlx = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }

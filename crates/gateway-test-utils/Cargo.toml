@@ -1,0 +1,24 @@
+[package]
+name = "gateway-test-utils"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+gateway-core    = { path = "../gateway-core" }
+gateway-config  = { path = "../gateway-config" }
+gateway-storage = { path = "../gateway-storage" }
+
+tokio       = { workspace = true }
+axum        = { workspace = true }
+hyper       = { workspace = true }
+hyper-util  = { workspace = true }
+tower       = { workspace = true }
+reqwest     = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+anyhow      = { workspace = true }
+tracing     = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid        = { workspace = true }
+chrono      = { workspace = true }
+sqlx        = { workspace = true }

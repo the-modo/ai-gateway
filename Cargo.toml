@@ -1,0 +1,89 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/gateway-core",
+    "crates/gateway-config",
+    "crates/gateway-providers",
+    "crates/gateway-cache",
+    "crates/gateway-telemetry",
+    "crates/gateway-storage",
+    "crates/gateway-test-utils",
+    "crates/mock-server",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["AI Gateway Contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/your-org/ai-gateway"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+
+# HTTP
+axum = { version = "0.7", features = ["http2", "macros"] }
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip"] }
+
+# HTTP client
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "tokio1-rustls-tls"] }
+reqwest = { version = "0.12", features = ["json", "stream", "http2", "rustls-tls"], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Config
+toml = "0.8"
+config = "0.14"
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Logging / tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+bytes = "1"
+pin-project-lite = "0.2"
+
+# Cache
+moka = { version = "0.12", features = ["future"] }
+
+# Metrics
+prometheus = { version = "0.13", features = ["process"] }
+
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Storage / DB
+sqlx = { version = "0.8", features = ["any", "sqlite", "postgres", "runtime-tokio", "chrono", "uuid"] }
+
+# Hashing
+sha2 = "0.10"
+hex = "0.4"
+
+# Pattern matching
+regex = "1"
+
+# Async utilities (test)
+tokio-util = { version = "0.7", features = ["full"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

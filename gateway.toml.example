@@ -1,0 +1,136 @@
+[server]
+host = "0.0.0.0"
+port = 4891
+request_timeout_ms = 30000
+max_connections = 10000
+
+# ─── Providers ───────────────────────────────────────────────────────────────
+
+[[providers]]
+name = "openai-primary"
+kind = "openai"
+api_key_env = "OPENAI_API_KEY"
+timeout_ms = 30000
+models = ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "o1", "o3-mini"]
+
+[[providers]]
+name = "anthropic-primary"
+kind = "anthropic"
+api_key_env = "ANTHROPIC_API_KEY"
+timeout_ms = 30000
+models = ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
+
+[[providers]]
+name = "gemini-primary"
+kind = "gemini"
+api_key_env = "GEMINI_API_KEY"
+timeout_ms = 30000
+models = ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
+
+# ─── Routing Rules ───────────────────────────────────────────────────────────
+# Rules are evaluated top-to-bottom. First matching rule wins.
+# Strategies: sequential | round_robin | weighted | latency | cost
+
+# OpenAI models: weighted between openai + anthropic, gemini as fallback
+[[routes]]
+id = "openai-models"
+models = ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "o1", "o3-mini"]
+strategy = "weighted"
+retries = 2
+retry_delay_ms = 500
+fallbacks = ["gemini-primary"]
+
+[[routes.providers]]
+name = "openai-primary"
+weight = 80
+
+[[routes.providers]]
+name = "anthropic-primary"
+weight = 20
+
+# Claude models: sequential failover to gemini
+[[routes]]
+id = "claude-models"
+models = ["claude-*"]
+strategy = "sequential"
+retries = 2
+retry_delay_ms = 300
+fallbacks = ["gemini-primary"]
+
+[[routes.providers]]
+name = "anthropic-primary"
+weight = 100
+
+# Gemini models: direct
+[[routes]]
+id = "gemini-models"
+models = ["gemini-*"]
+strategy = "sequential"
+retries = 1
+retry_delay_ms = 500
+fallbacks = []
+
+[[routes.providers]]
+name = "gemini-primary"
+weight = 100
+
+# Wildcard fallback: round-robin across all providers
+[[routes]]
+id = "default"
+models = ["*"]
+strategy = "round_robin"
+retries = 3
+retry_delay_ms = 500
+fallbacks = ["gemini-primary"]
+
+[[routes.providers]]
+name = "openai-primary"
+weight = 50
+
+[[routes.providers]]
+name = "anthropic-primary"
+weight = 50
+
+# ─── Cache ───────────────────────────────────────────────────────────────────
+
+[cache]
+enabled = true
+
+[cache.exact_match]
+enabled = true
+ttl_seconds = 3600
+max_entries = 10000
+
+[cache.semantic]
+enabled = false
+similarity_threshold = 0.95
+ttl_seconds = 3600
+
+# ─── Telemetry ───────────────────────────────────────────────────────────────
+
+[telemetry]
+metrics_enabled = true
+metrics_path = "/metrics"
+tracing_enabled = false
+log_level = "info"
+log_format = "text"
+
+# ─── Auth ────────────────────────────────────────────────────────────────────
+
+[auth]
+enabled = false
+
+# ─── Storage ─────────────────────────────────────────────────────────────────
+# SQLite (default): "sqlite://./gateway.db"
+# PostgreSQL:       "postgres://user:pass@localhost/gateway"
+
+[storage]
+database_url = "sqlite://./gateway.db"
+log_bodies = true
+retention_days = 30
+
+# ─── Dashboard auth ───────────────────────────────────────────────────────────
+
+[dashboard_auth]
+username = "admin"
+password = "change-me"

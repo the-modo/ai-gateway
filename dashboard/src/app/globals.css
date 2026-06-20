@@ -1,0 +1,358 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Theme tokens ───────────────────────────────────────────────────────── */
+:root, [data-theme="dark"] {
+  --bg:           #03050f;
+  --bg-orb-1:     rgba(99,102,241,0.12);
+  --bg-orb-2:     rgba(34,211,238,0.08);
+  --bg-orb-3:     rgba(168,85,247,0.08);
+
+  --glass-bg:     rgba(255,255,255,0.04);
+  --glass-hover:  rgba(255,255,255,0.07);
+  --glass-strong: rgba(255,255,255,0.08);
+  --glass-border: rgba(255,255,255,0.08);
+  --glass-border2:rgba(255,255,255,0.05);
+  --glass-shadow: 0 4px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.2);
+
+  --sidebar-bg:   rgba(3,5,15,0.75);
+  --sidebar-bdr:  rgba(255,255,255,0.06);
+
+  --nav-active-bg:  rgba(99,102,241,0.15);
+  --nav-active-bdr: rgba(99,102,241,0.30);
+  --nav-active-shd: 0 0 20px rgba(99,102,241,0.15), inset 0 1px 0 rgba(255,255,255,0.1);
+
+  --t1: rgba(255,255,255,1.00);
+  --t2: rgba(255,255,255,0.86);
+  --t3: rgba(255,255,255,0.66);
+  --t4: rgba(255,255,255,0.40);
+  --bd: rgba(255,255,255,0.07);
+
+  --input-bg:     rgba(255,255,255,0.05);
+  --input-bdr:    rgba(255,255,255,0.10);
+  --input-focus:  rgba(99,102,241,0.50);
+  --input-ring:   rgba(99,102,241,0.15);
+  --input-ph:     rgba(255,255,255,0.28);
+
+  --gradient-text: linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 40%, #22d3ee 100%);
+  --grid-line:    rgba(255,255,255,0.025);
+}
+
+[data-theme="light"] {
+  --bg:           #e8eaf2;
+  --bg-orb-1:     rgba(99,102,241,0.38);
+  --bg-orb-2:     rgba(34,211,238,0.28);
+  --bg-orb-3:     rgba(79,70,229,0.22);
+
+  --glass-bg:     rgba(255,255,255,0.82);
+  --glass-hover:  rgba(255,255,255,0.95);
+  --glass-strong: rgba(255,255,255,0.92);
+  --glass-border: rgba(15,18,35,0.09);
+  --glass-border2:rgba(15,18,35,0.06);
+  --glass-shadow: 0 1px 3px rgba(15,18,35,0.05), 0 4px 20px rgba(15,18,35,0.07);
+
+  --sidebar-bg:   rgba(8,10,32,0.82);
+  --sidebar-bdr:  rgba(255,255,255,0.10);
+
+  --nav-active-bg:  rgba(255,255,255,0.18);
+  --nav-active-bdr: rgba(255,255,255,0.28);
+  --nav-active-shd: inset 0 1.5px 0 rgba(255,255,255,0.70), 0 4px 20px rgba(0,0,0,0.30);
+
+  --t1: rgba(10,12,28,1.00);
+  --t2: rgba(10,12,28,0.92);
+  --t3: rgba(10,12,28,0.74);
+  --t4: rgba(10,12,28,0.52);
+  --bd: rgba(15,18,35,0.09);
+
+  --input-bg:     rgba(15,18,35,0.045);
+  --input-bdr:    rgba(15,18,35,0.14);
+  --input-focus:  rgba(99,102,241,0.55);
+  --input-ring:   rgba(99,102,241,0.14);
+  --input-ph:     rgba(15,18,35,0.30);
+
+  --gradient-text: linear-gradient(135deg, #3730a3 0%, #6366f1 45%, #0284c7 100%);
+  --grid-line:    transparent;
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--bg);
+  color: var(--t1);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+
+/* ─── Semantic text ──────────────────────────────────────────────────────── */
+.t1 { color: var(--t1); }
+.t2 { color: var(--t2); }
+.t3 { color: var(--t3); }
+.t4 { color: var(--t4); }
+
+/* ─── Glass ──────────────────────────────────────────────────────────────── */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.glass-hover:hover {
+  background: var(--glass-hover);
+  border-color: rgba(255,255,255,0.14);
+}
+
+/* Light mode: lighter blur, clean professional cards */
+[data-theme="light"] .glass {
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+}
+[data-theme="light"] .glass-hover:hover {
+  background: var(--glass-hover);
+  border-color: rgba(15,18,35,0.12);
+  box-shadow: 0 2px 8px rgba(15,18,35,0.07), 0 8px 28px rgba(15,18,35,0.09);
+}
+
+.glass-strong {
+  background: var(--glass-strong);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-sidebar {
+  background: var(--sidebar-bg);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-right: 1px solid var(--sidebar-bdr);
+  transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
+}
+
+/* ─── Dark side panel (canvas node editors) ──────────────────────────────── */
+.dark-panel {
+  background: linear-gradient(175deg, rgba(18,22,58,0.92) 0%, rgba(6,8,26,0.95) 100%);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: -8px 0 40px rgba(4,8,28,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
+
+  --t1: rgba(255,255,255,0.95);
+  --t2: rgba(255,255,255,0.70);
+  --t3: rgba(255,255,255,0.45);
+  --t4: rgba(255,255,255,0.28);
+  --bd: rgba(255,255,255,0.09);
+  --glass-bg:    rgba(255,255,255,0.06);
+  --glass-hover: rgba(255,255,255,0.10);
+  --input-bg:    rgba(255,255,255,0.07);
+  --input-bdr:   rgba(255,255,255,0.14);
+  --input-ph:    rgba(255,255,255,0.30);
+}
+.dark-panel [class*="text-white"] { color: rgba(255,255,255,0.95) !important; }
+.dark-panel .glass,
+[data-theme="light"] .dark-panel .glass {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.10);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+[data-theme="light"] .dark-panel .glass-input {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.95);
+}
+.dark-panel .glass-input option { background: #0a0e22; color: rgba(255,255,255,0.9); }
+
+/* ─── Nav active ─────────────────────────────────────────────────────────── */
+.nav-active {
+  background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
+  box-shadow:
+    0 4px 20px rgba(99,102,241,0.40),
+    inset 0 1px 0 rgba(255,255,255,0.22),
+    inset 0 -1px 0 rgba(0,0,0,0.14);
+}
+
+/* ─── Input ──────────────────────────────────────────────────────────────── */
+.glass-input {
+  background: var(--input-bg);
+  border: 1px solid var(--input-bdr);
+  color: var(--t1);
+  transition: all 0.2s;
+}
+.glass-input:focus {
+  outline: none;
+  border-color: var(--input-focus);
+  box-shadow: 0 0 0 3px var(--input-ring);
+  background: var(--glass-hover);
+}
+.glass-input::placeholder { color: var(--input-ph); }
+
+/* option elements */
+.glass-input option { background: var(--bg); color: var(--t1); }
+
+/* ─── Border ─────────────────────────────────────────────────────────────── */
+.bd  { border-color: var(--bd); }
+.bd2 { border-color: var(--glass-border2); }
+
+/* ─── Table row hover ────────────────────────────────────────────────────── */
+.row-hover:hover { background: var(--glass-hover); }
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width:4px; height:4px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background: var(--t4); border-radius:4px; }
+
+/* ─── Gradient text ──────────────────────────────────────────────────────── */
+.gradient-text {
+  background: var(--gradient-text);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Background orbs ────────────────────────────────────────────────────── */
+.bg-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.5s;
+}
+
+/* ─── Grid ───────────────────────────────────────────────────────────────── */
+.bg-grid {
+  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px),
+                    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ─── Status dots ────────────────────────────────────────────────────────── */
+.dot-online  { background:#10b981; box-shadow:0 0 6px #10b981, 0 0 12px rgba(16,185,129,0.5); }
+.dot-warning { background:#f59e0b; box-shadow:0 0 6px #f59e0b; }
+.dot-offline { background:#ef4444; box-shadow:0 0 6px #ef4444; }
+
+/* ─── Glow ───────────────────────────────────────────────────────────────── */
+.glow-blue   { box-shadow:0 0 20px rgba(99,102,241,0.3), 0 0 60px rgba(99,102,241,0.1); }
+.glow-cyan   { box-shadow:0 0 20px rgba(34,211,238,0.2), 0 0 60px rgba(34,211,238,0.1); }
+
+/* ─── Toggle ─────────────────────────────────────────────────────────────── */
+.toggle-track { transition: background 0.3s; }
+
+/* ─── Light mode: remap all Tailwind white/* text/border/bg utilities ────── */
+[data-theme="light"] [class*="text-white"] {
+  color: var(--t1) !important;
+}
+[data-theme="light"] [class*="border-white"] {
+  border-color: var(--bd) !important;
+}
+[data-theme="light"] [class*="bg-white\/"] {
+  background: var(--glass-bg) !important;
+}
+[data-theme="light"] [class*="ring-white"] {
+  --tw-ring-color: var(--bd) !important;
+}
+[data-theme="light"] .text-indigo-300  { color: #4338ca; }
+[data-theme="light"] .text-cyan-300    { color: #0891b2; }
+[data-theme="light"] .text-emerald-300 { color: #059669; }
+[data-theme="light"] .text-purple-300  { color: #7e22ce; }
+[data-theme="light"] .text-amber-300   { color: #b45309; }
+[data-theme="light"] .text-amber-400   { color: #92400e; }
+/* opacity-modifier variants that Tailwind generates as separate classes */
+[data-theme="light"] .text-amber-300\/80  { color: #92400e; }
+[data-theme="light"] .text-indigo-300\/80 { color: #3730a3; }
+[data-theme="light"] .text-emerald-300\/80{ color: #065f46; }
+
+/* ─── Semantic banner classes — adapt opacity for light mode ─────────────── */
+.banner-info {
+  background: rgba(99,102,241,0.07);
+  border: 1px solid rgba(99,102,241,0.18);
+}
+.banner-warning {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.25);
+}
+.banner-flag {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.22);
+}
+.banner-redact {
+  background: rgba(99,102,241,0.08);
+  border: 1px solid rgba(99,102,241,0.22);
+}
+.banner-block {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.22);
+}
+[data-theme="light"] .banner-info    { background: rgba(99,102,241,0.10); border-color: rgba(99,102,241,0.30); }
+[data-theme="light"] .banner-warning { background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.40); }
+[data-theme="light"] .banner-flag    { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.35); }
+[data-theme="light"] .banner-redact  { background: rgba(99,102,241,0.10); border-color: rgba(99,102,241,0.30); }
+[data-theme="light"] .banner-block   { background: rgba(239,68,68,0.10);  border-color: rgba(239,68,68,0.32);  }
+
+/* ─── Sidebar: dark frosted glass in light mode (same feel as dark theme) ── */
+[data-theme="light"] .glass-sidebar {
+  background: linear-gradient(175deg,
+    rgba(18,22,58,0.86) 0%,
+    rgba(6,8,26,0.90) 100%
+  );
+  backdrop-filter: blur(48px) saturate(200%);
+  -webkit-backdrop-filter: blur(48px) saturate(200%);
+  border-right: 1px solid rgba(255,255,255,0.10);
+  box-shadow:
+    4px 0 48px rgba(4,8,28,0.40),
+    1px 0 0 rgba(255,255,255,0.06);
+
+  /* Flip semantic tokens to light-on-dark inside the sidebar */
+  --t1: rgba(255,255,255,0.95);
+  --t2: rgba(255,255,255,0.62);
+  --t3: rgba(255,255,255,0.38);
+  --t4: rgba(255,255,255,0.22);
+  --bd: rgba(255,255,255,0.09);
+  --glass-bg:    rgba(255,255,255,0.06);
+  --glass-hover: rgba(255,255,255,0.10);
+  --gradient-text: linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 45%, #22d3ee 100%);
+}
+
+/* Keep Tailwind colour utilities light inside the dark sidebar */
+[data-theme="light"] .glass-sidebar .text-indigo-300 { color: #a5b4fc !important; }
+[data-theme="light"] .glass-sidebar .text-indigo-400 { color: #818cf8 !important; }
+
+/* Deeper indigo accents read better on frosted white */
+[data-theme="light"] .text-indigo-400 { color: #4f46e5; }
+
+/* No grid lines in light mode — clean liquid-glass backdrop */
+[data-theme="light"] .bg-grid { background-image: none; }
+
+/* ─── Font size scaling ──────────────────────────────────────────────────── */
+/* sm = compact (Tailwind defaults), md = medium (default), lg = comfortable  */
+[data-font-size="md"] .text-\[9px\]  { font-size: 10px; }
+[data-font-size="md"] .text-\[10px\] { font-size: 11px; }
+[data-font-size="md"] .text-\[11px\] { font-size: 12px; }
+[data-font-size="md"] .text-xs       { font-size: 13px; }
+
+[data-font-size="lg"] .text-\[9px\]  { font-size: 11px; }
+[data-font-size="lg"] .text-\[10px\] { font-size: 12px; }
+[data-font-size="lg"] .text-\[11px\] { font-size: 13px; }
+[data-font-size="lg"] .text-xs       { font-size: 14px; }
+[data-font-size="lg"] .text-sm       { font-size: 15px; }
+
+/* ─── Recharts ───────────────────────────────────────────────────────────── */
+.recharts-default-tooltip {
+  background: var(--glass-strong) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 6px !important;
+  color: var(--t1) !important;
+}
+
+/* ─── Canvas test animation ──────────────────────────────────────────────── */
+.canvas-node-anim {
+  transition: box-shadow 0.35s ease, transform 0.35s ease !important;
+}

@@ -1,0 +1,21 @@
+[package]
+name = "gateway-providers"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+gateway-config = { path = "../gateway-config" }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+bytes = { workspace = true }
+tracing = { workspace = true }
+pin-project-lite = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }

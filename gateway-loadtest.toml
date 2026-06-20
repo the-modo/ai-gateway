@@ -1,0 +1,47 @@
+[server]
+host = "127.0.0.1"
+port = 8081
+request_timeout_ms = 10000
+max_connections = 10000
+
+[[providers]]
+name    = "mock-openai"
+kind    = "custom"
+api_key = "test-key"
+base_url = "http://127.0.0.1:9090"
+timeout_ms = 5000
+models  = ["*"]
+
+[[routes]]
+id       = "default"
+models   = ["*"]
+strategy = "sequential"
+providers = [{ name = "mock-openai", weight = 100 }]
+retries  = 0
+retry_delay_ms = 0
+
+[cache]
+enabled = false
+[cache.exact_match]
+enabled    = false
+ttl_seconds = 3600
+max_entries = 10000
+[cache.semantic]
+enabled = false
+similarity_threshold = 0.95
+ttl_seconds = 3600
+
+[telemetry]
+metrics_enabled = false
+metrics_path    = "/metrics"
+tracing_enabled = false
+log_level       = "error"
+log_format      = "text"
+
+[auth]
+enabled = false
+
+[storage]
+database_url   = "sqlite://./gateway.db"
+log_bodies     = false
+retention_days = 1

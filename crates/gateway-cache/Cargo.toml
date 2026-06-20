@@ -1,0 +1,17 @@
+[package]
+name = "gateway-cache"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+gateway-config = { path = "../gateway-config" }
+gateway-providers = { path = "../gateway-providers" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+moka = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+bytes = { workspace = true }
