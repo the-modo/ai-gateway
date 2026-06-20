@@ -165,6 +165,15 @@ See [LICENSE](LICENSE) for the full text. In short:
 
 ---
 
+## Related repositories
+
+| Repo | What it is |
+|---|---|
+| [the-modo/ai-gateway-update-manager](https://github.com/the-modo/ai-gateway-update-manager) | `publish.sh` — writes release manifests so gateways see "update available" |
+| [the-modo/the-modo.github.io](https://github.com/the-modo/the-modo.github.io) | Marketing site & download page |
+
+---
+
 ## Get in touch
 
 | | |

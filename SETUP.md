@@ -182,7 +182,10 @@ Two paths, depending on whether the host can reach the public internet:
 
 **Online** — `Settings → Updates → Check for updates` in the dashboard polls the
 release manifest (configurable URL). When a newer version is published you get a
-banner with the release notes.
+banner with the release notes. Publishers use the
+[Modo Update Manager](https://github.com/the-modo/ai-gateway-update-manager)
+to write the manifest into place — a tiny shell script that lives in its own
+repo so the gateway tree stays focused on the runtime.
 
 **Air-gapped** — `Settings → Updates → Upload package`. Drop in a release `.zip`
 and it's staged on disk with the sha256 recorded. Applying remains a manual
