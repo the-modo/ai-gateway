@@ -48,7 +48,7 @@ export default function Sidebar() {
         {nav.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/' && pathname.startsWith(href))
           return (
-            <Link key={href} href={href}
+            <Link key={href} href={href} prefetch={false}
               className={clsx(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
                 active ? 'nav-active text-white' : 't2 hover:t1 hover:bg-[var(--glass-hover)]'

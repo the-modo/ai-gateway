@@ -20,6 +20,33 @@ async fn main() -> anyhow::Result<()> {
     init_tracing(&config.telemetry);
     info!("AI Gateway starting...");
 
+    // Refuse to silently expose a default-credential dashboard to the network.
+    let host = config.server.host.as_str();
+    let public_bind = !(host == "127.0.0.1" || host == "localhost" || host == "::1");
+    if config.dashboard_auth.password == "admin" {
+        if public_bind {
+            tracing::error!(
+                "SECURITY: dashboard is using the default password 'admin' while bound to a \
+                 non-loopback address ({host}). Set [dashboard_auth].password to a strong, unique \
+                 value before exposing the gateway. Continuing, but this is exploitable."
+            );
+        } else {
+            tracing::warn!(
+                "dashboard is using the default password 'admin' — change [dashboard_auth].password \
+                 before exposing the gateway publicly."
+            );
+        }
+    }
+
+    // The /v1 inference API is unauthenticated unless [auth].enabled = true. On a
+    // public bind that makes the gateway an open relay against real providers.
+    if !config.auth.enabled && public_bind {
+        tracing::warn!(
+            "[auth].enabled = false while bound to {host}: the /v1 inference API is open to \
+             anyone. Enable auth (and configure keys) before exposing real providers."
+        );
+    }
+
     let (config_tx, config_rx) = tokio::sync::watch::channel(Arc::new(config.clone()));
 
     {

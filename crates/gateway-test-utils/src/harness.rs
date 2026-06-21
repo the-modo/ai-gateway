@@ -320,8 +320,30 @@ impl HarnessBuilder {
         // Give the server a tick to come up
         tokio::time::sleep(Duration::from_millis(10)).await;
 
+        // Dashboard data/config routes now require a session token. Log in once
+        // with the (default) dashboard credentials and attach the token as a
+        // default header so existing test requests are authenticated.
+        let bootstrap = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()?;
+        let token: String = bootstrap
+            .post(format!("{}/dashboard/login", base_url))
+            .json(&serde_json::json!({ "username": "admin", "password": "admin" }))
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await
+            .ok()
+            .and_then(|v| v["token"].as_str().map(String::from))
+            .unwrap_or_default();
+
+        let mut headers = reqwest::header::HeaderMap::new();
+        if let Ok(val) = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}")) {
+            headers.insert(reqwest::header::AUTHORIZATION, val);
+        }
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
+            .default_headers(headers)
             .build()?;
 
         Ok(TestHarness {
