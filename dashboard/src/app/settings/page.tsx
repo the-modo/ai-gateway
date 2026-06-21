@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Database, Save, Eye, EyeOff, CheckCircle2, RefreshCw, HardDrive, Activity, Sun, Moon, Server, Palette, ScrollText, Copy, Check, DownloadCloud, ExternalLink, UploadCloud } from 'lucide-react'
+import { Database, Save, Eye, EyeOff, CheckCircle2, RefreshCw, HardDrive, Activity, Sun, Moon, Server, Palette, ScrollText, Copy, Check, DownloadCloud, ExternalLink, UploadCloud, Gauge, Play, Loader2 } from 'lucide-react'
 import { McpIcon } from '@/components/Sidebar'
 import { getGatewayBase } from '@/lib/config'
 import GlassCard from '@/components/GlassCard'
@@ -111,6 +111,52 @@ export default function SettingsPage() {
   const mcpEndpoint = `${getGatewayBase()}/mcp`
   const copyMcpEndpoint = async () => {
     if (await copyText(mcpEndpoint)) { setMcpCopied(true); setTimeout(() => setMcpCopied(false), 1500) }
+  }
+
+  /* ─── Performance evaluation ────────────────────────────────────────────── */
+  type PerfRow = {
+    label: string; effort: string; concurrency: number; total_requests: number;
+    successful_requests: number; failed_requests: number;
+    throughput_tps: number; p50_ms: number; p95_ms: number; p99_ms: number;
+  }
+  type PerfRun = {
+    id: string; sweep: string; status: 'running' | 'completed' | 'failed';
+    started_at_unix_ms: number; finished_at_unix_ms: number | null;
+    error: string | null;
+    report: null | { config: any; results: PerfRow[] };
+  }
+  const [perfSweep,    setPerfSweep]    = useState<'default' | 'marketing'>('default')
+  const [perfMockLat,  setPerfMockLat]  = useState('0')
+  const [perfRun,      setPerfRun]      = useState<PerfRun | null>(null)
+  const [perfError,    setPerfError]    = useState<string | null>(null)
+  const [perfStarting, setPerfStarting] = useState(false)
+  const startPerfRun = async () => {
+    setPerfStarting(true); setPerfError(null); setPerfRun(null)
+    try {
+      const res = await fetch(`${getGatewayBase()}/perf/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sweep: perfSweep, mock_latency_ms: Number(perfMockLat) || 0 }),
+      })
+      const j = await res.json()
+      if (!res.ok) { setPerfError(j.error ?? 'Failed to start'); setPerfStarting(false); return }
+      const id = j.id as string
+      const tick = async () => {
+        try {
+          const r = await fetch(`${getGatewayBase()}/perf/runs/${id}`)
+          if (!r.ok) throw new Error('not found')
+          const data: PerfRun = await r.json()
+          setPerfRun(data)
+          if (data.status === 'running') setTimeout(tick, 1500)
+          else setPerfStarting(false)
+        } catch (e: any) {
+          setPerfError(e?.message ?? 'Poll failed'); setPerfStarting(false)
+        }
+      }
+      tick()
+    } catch (e: any) {
+      setPerfError(e?.message ?? 'Unknown error'); setPerfStarting(false)
+    }
   }
 
   // Semantic cache
@@ -449,6 +495,99 @@ export default function SettingsPage() {
       </GlassCard>
 
       {/* Storage */}
+      {/* Performance evaluation */}
+      <GlassCard
+        title="Performance"
+        subtitle="Run an end-to-end gateway benchmark in real time"
+        icon={<Gauge size={15} className="text-amber-400"/>}
+      >
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="text-xs t3 block mb-1.5">Sweep</label>
+            <select className="glass-input w-full rounded-xl px-3 py-2 text-sm"
+              value={perfSweep} onChange={e => setPerfSweep(e.target.value as any)}
+              disabled={perfStarting}>
+              <option value="default">default — 12 scenarios, ~10 s</option>
+              <option value="marketing">marketing — 35 scenarios, several minutes</option>
+            </select>
+          </div>
+          <Input
+            label="Mock upstream latency (ms)"
+            value={perfMockLat} onChange={setPerfMockLat}
+            placeholder="0"
+            hint="Set to 0 to measure gateway overhead only" />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button onClick={startPerfRun}
+            disabled={perfStarting}
+            className={clsx('flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300',
+              perfStarting
+                ? 'bg-indigo-500/10 text-indigo-300/70 cursor-not-allowed'
+                : 'bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-500/30 hover:bg-indigo-500/25')}>
+            {perfStarting
+              ? <><Loader2 size={14} className="animate-spin"/> Running…</>
+              : <><Play size={14}/> Run benchmark</>}
+          </button>
+          {perfRun && <span className="text-[11px] t3 font-mono">{perfRun.id}</span>}
+        </div>
+
+        {perfError && (
+          <div className="mt-3 text-xs text-rose-400 glass rounded-lg px-3 py-2">
+            {perfError}
+          </div>
+        )}
+
+        {perfRun?.status === 'failed' && (
+          <div className="mt-3 text-xs text-rose-400 glass rounded-lg px-3 py-2">
+            Run failed: {perfRun.error ?? 'unknown error'}
+          </div>
+        )}
+
+        {perfRun?.report && (
+          <div className="mt-4 pt-4 border-t bd">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs t2">Results — {perfRun.report.results.length} scenarios</div>
+              <div className="text-[10px] t4">
+                Wall clock: {((perfRun.finished_at_unix_ms ?? Date.now()) - perfRun.started_at_unix_ms) / 1000} s
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="t3">
+                    <th className="text-left  py-1 pr-3">scenario</th>
+                    <th className="text-right py-1 px-2">conc</th>
+                    <th className="text-right py-1 px-2">TPS</th>
+                    <th className="text-right py-1 px-2">p50 ms</th>
+                    <th className="text-right py-1 px-2">p95 ms</th>
+                    <th className="text-right py-1 px-2">p99 ms</th>
+                    <th className="text-right py-1 pl-2">errors</th>
+                  </tr>
+                </thead>
+                <tbody className="font-mono">
+                  {perfRun.report.results.map((r, i) => (
+                    <tr key={i} className="border-t bd">
+                      <td className="py-1 pr-3 t2">{r.label}</td>
+                      <td className="py-1 px-2 text-right t2">{r.concurrency}</td>
+                      <td className="py-1 px-2 text-right t1 font-semibold">{r.throughput_tps.toFixed(0)}</td>
+                      <td className="py-1 px-2 text-right t2">{r.p50_ms.toFixed(2)}</td>
+                      <td className="py-1 px-2 text-right t2">{r.p95_ms.toFixed(2)}</td>
+                      <td className="py-1 px-2 text-right t2">{r.p99_ms.toFixed(2)}</td>
+                      <td className={clsx('py-1 pl-2 text-right',
+                        r.failed_requests > 0 ? 'text-rose-400' : 't3')}>{r.failed_requests}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[10px] t4 mt-3">
+              p50/p95/p99 are gateway round-trip times measured client-side, with a synthetic upstream so the numbers reflect gateway-induced overhead only.
+            </p>
+          </div>
+        )}
+      </GlassCard>
+
       <GlassCard title="Storage" subtitle="Request logging and analytics database" icon={<HardDrive size={15} className="text-indigo-400"/>}>
         <div className="mb-4">
           <label className="text-xs t3 block mb-2">Database backend</label>

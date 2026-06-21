@@ -9,6 +9,7 @@ members = [
     "crates/gateway-storage",
     "crates/gateway-test-utils",
     "crates/mock-server",
+    "crates/gateway-eval",
 ]
 
 [workspace.package]

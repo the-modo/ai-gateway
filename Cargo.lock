@@ -917,6 +917,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "gateway-eval"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "gateway-cache",
+ "gateway-config",
+ "gateway-core",
+ "gateway-providers",
+ "gateway-storage",
+ "gateway-test-utils",
+ "once_cell",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "gateway-providers"
 version = "0.1.0"
 dependencies = [

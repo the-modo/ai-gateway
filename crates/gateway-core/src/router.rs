@@ -9,7 +9,7 @@ use tower_http::{
 };
 
 use crate::{
-    handlers, mcp,
+    handlers, mcp, perf,
     middleware::{auth, dashboard_auth, login_rate_limit},
     state::AppState,
 };
@@ -42,6 +42,10 @@ pub fn build(state: AppState) -> Router {
         .route("/config/providers", get(handlers::providers_config_get))
         .route("/config/mcp", get(mcp::mcp_config_get).put(mcp::mcp_config_put))
         .route("/mcp/tools", get(mcp::mcp_tools_get))
+        // Performance evaluation — same admin auth gate as /config/*.
+        .route("/perf/run",      post(perf::perf_run))
+        .route("/perf/runs",     get(perf::perf_runs_list))
+        .route("/perf/runs/:id", get(perf::perf_run_get))
         // Update status/upload are admin surfaces — keep them behind the same gate.
         .route("/updates/status", get(crate::updates::updates_status))
         .route("/updates/upload", post(crate::updates::updates_upload)

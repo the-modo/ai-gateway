@@ -114,6 +114,8 @@ pub struct AppState {
     /// Per-client login attempt counters (client → (window_start_ms, count))
     /// backing the login rate limiter. Per-instance so tests don't share state.
     pub login_attempts: Arc<Mutex<HashMap<String, (i64, u32)>>>,
+    /// In-memory history of performance evaluation runs.
+    pub perf_runs: crate::perf::PerfStore,
 }
 
 /// Lifetime of an issued dashboard session token.
@@ -153,7 +155,12 @@ impl AppState {
         let log_bodies = Arc::new(AtomicBool::new(cfg.storage.log_bodies));
         let cache_enabled = Arc::new(AtomicBool::new(cache_on));
         let semantic_cache = Arc::new(SemanticCache::new());
-        let semantic_settings = Arc::new(RwLock::new(SemanticCacheSettings::default()));
+        let semantic_settings = Arc::new(RwLock::new(SemanticCacheSettings {
+            enabled: cfg.cache.enabled && cfg.cache.semantic.enabled,
+            threshold: cfg.cache.semantic.similarity_threshold,
+            ttl_seconds: cfg.cache.semantic.ttl_seconds,
+            max_entries: SemanticCacheSettings::default().max_entries,
+        }));
         let guardrail_config = Arc::new(RwLock::new(GuardrailConfig::default()));
         let content_shield_config = Arc::new(RwLock::new(ContentShieldConfig::default()));
         let model_pricing = Arc::new(RwLock::new(ModelPricingConfig::default()));
@@ -208,6 +215,7 @@ impl AppState {
             model_pricing, mcp_config,
             dashboard_tokens: Arc::new(RwLock::new(HashMap::new())),
             login_attempts: Arc::new(Mutex::new(HashMap::new())),
+            perf_runs: crate::perf::PerfStore::default(),
         })
     }
 
