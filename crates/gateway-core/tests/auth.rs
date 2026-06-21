@@ -101,9 +101,10 @@ async fn auth_multiple_keys_each_valid() {
     }
 }
 
-/// Analytics endpoints are NOT protected by auth middleware.
+/// Analytics/logs endpoints require a valid dashboard session token.
+/// (Regression test: these were previously reachable unauthenticated.)
 #[tokio::test]
-async fn analytics_endpoints_bypass_auth() {
+async fn analytics_endpoints_require_dashboard_auth() {
     let h = HarnessBuilder::new()
         .with_openai_mock("p", MockConfig::default())
         .with_auth(make_keys(&["sk-valid-key"]))
@@ -111,32 +112,34 @@ async fn analytics_endpoints_bypass_auth() {
         .await
         .unwrap();
 
+    // A tokenless client represents an anonymous internet caller.
+    let anon = reqwest::Client::new();
+
     // /health — always public
-    let health = h.client.get(format!("{}/health", h.base_url)).send().await.unwrap();
+    let health = anon.get(format!("{}/health", h.base_url)).send().await.unwrap();
     assert_eq!(health.status(), 200, "/health should be public");
 
-    // /analytics/summary — not behind auth
-    let summary = h
-        .client
+    // /analytics/summary — must reject anonymous callers
+    let summary = anon
         .get(format!("{}/analytics/summary", h.base_url))
         .send()
         .await
         .unwrap();
-    assert_eq!(summary.status(), 200, "/analytics/summary should be public");
+    assert_eq!(summary.status(), 401, "/analytics/summary must require auth");
 
-    // /logs — not behind auth
-    let logs = h
-        .client
-        .get(format!("{}/logs", h.base_url))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(logs.status(), 200, "/logs should be public");
+    // /logs — must reject anonymous callers
+    let logs = anon.get(format!("{}/logs", h.base_url)).send().await.unwrap();
+    assert_eq!(logs.status(), 401, "/logs must require auth");
+
+    // With a valid dashboard token (the harness client) it succeeds.
+    let ok = h.client.get(format!("{}/analytics/summary", h.base_url)).send().await.unwrap();
+    assert_eq!(ok.status(), 200, "authenticated analytics request should succeed");
 }
 
-/// chat endpoint without auth is blocked, analytics endpoint without auth is allowed.
+/// Both the chat endpoint (gateway key) and analytics (dashboard token) reject
+/// unauthenticated callers.
 #[tokio::test]
-async fn chat_blocked_analytics_public_when_auth_enabled() {
+async fn chat_and_analytics_both_require_auth() {
     let h = HarnessBuilder::new()
         .with_openai_mock("p", MockConfig::default())
         .with_auth(make_keys(&["sk-valid"]))
@@ -147,11 +150,11 @@ async fn chat_blocked_analytics_public_when_auth_enabled() {
     let chat_resp = h.chat("gpt-4o", "blocked").await;
     assert_eq!(chat_resp.status(), 401, "unauthenticated chat must be blocked");
 
-    let analytics_resp = h
-        .client
+    let anon = reqwest::Client::new();
+    let analytics_resp = anon
         .get(format!("{}/analytics/summary", h.base_url))
         .send()
         .await
         .unwrap();
-    assert_eq!(analytics_resp.status(), 200, "analytics must remain public");
+    assert_eq!(analytics_resp.status(), 401, "unauthenticated analytics must be blocked");
 }

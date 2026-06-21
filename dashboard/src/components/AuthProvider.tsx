@@ -3,12 +3,16 @@ import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
+import { installFetchInterceptor } from '@/lib/fetch-interceptor'
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname  = usePathname()
   const router    = useRouter()
   const isLogin   = pathname === '/login' || pathname === '/login/'
   const [ready, setReady] = useState(false)
+
+  // Attach the dashboard token to every gateway request (and handle 401s).
+  installFetchInterceptor()
 
   useEffect(() => {
     const token = localStorage.getItem('gw-dashboard-token')

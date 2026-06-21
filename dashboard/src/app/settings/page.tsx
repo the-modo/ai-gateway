@@ -185,7 +185,21 @@ export default function SettingsPage() {
     })
   }, [])
 
-  const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2500) }
+  const [saveError, setSaveError] = useState(false)
+  const handleSave = async () => {
+    setSaveError(false)
+    // Persist the settings that have runtime config endpoints. (Server-level
+    // fields such as port/log level require a restart and have no live endpoint.)
+    const results = await Promise.all([
+      updateCacheConfig({ enabled: cacheEnabled }),
+      updateStorageConfig({ log_bodies: logBodies }),
+    ])
+    if (results.every(r => r !== null)) {
+      setSaved(true); setTimeout(() => setSaved(false), 2500)
+    } else {
+      setSaveError(true); setTimeout(() => setSaveError(false), 3000)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -198,8 +212,11 @@ export default function SettingsPage() {
         <button onClick={handleSave}
           className={clsx('flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300',
             saved ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30'
+                  : saveError ? 'bg-red-500/15 text-red-400 ring-1 ring-red-500/30'
                   : 'bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-500/30 hover:bg-indigo-500/25')}>
-          {saved ? <><CheckCircle2 size={14}/>Saved</> : <><Save size={14}/>Save changes</>}
+          {saved ? <><CheckCircle2 size={14}/>Saved</>
+            : saveError ? <><Save size={14}/>Save failed</>
+            : <><Save size={14}/>Save changes</>}
         </button>
       </div>
 

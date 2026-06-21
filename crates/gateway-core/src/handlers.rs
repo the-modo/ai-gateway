@@ -1026,8 +1026,10 @@ pub async fn dashboard_login(
     Json(req): Json<LoginRequest>,
 ) -> impl IntoResponse {
     let cfg = state.config();
-    if req.username == cfg.dashboard_auth.username && req.password == cfg.dashboard_auth.password {
-        let token = Uuid::new_v4().to_string();
+    let ok = crate::middleware::constant_time_eq(req.username.as_bytes(), cfg.dashboard_auth.username.as_bytes())
+        & crate::middleware::constant_time_eq(req.password.as_bytes(), cfg.dashboard_auth.password.as_bytes());
+    if ok {
+        let token = state.issue_dashboard_token().await;
         (StatusCode::OK, Json(json!({ "token": token, "username": req.username }))).into_response()
     } else {
         (StatusCode::UNAUTHORIZED, Json(json!({ "error": "Invalid credentials" }))).into_response()

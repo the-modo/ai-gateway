@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sqlx::{Any, Pool};
@@ -106,6 +108,22 @@ pub struct AppState {
     pub model_pricing: Arc<RwLock<ModelPricingConfig>>,
     /// Registered upstream MCP servers exposed via /mcp.
     pub mcp_config: Arc<RwLock<crate::mcp::McpConfig>>,
+    /// Active dashboard session tokens → expiry (epoch ms). Issued by
+    /// `/dashboard/login` and required by the dashboard-auth middleware.
+    pub dashboard_tokens: Arc<RwLock<HashMap<String, i64>>>,
+    /// Per-client login attempt counters (client → (window_start_ms, count))
+    /// backing the login rate limiter. Per-instance so tests don't share state.
+    pub login_attempts: Arc<Mutex<HashMap<String, (i64, u32)>>>,
+}
+
+/// Lifetime of an issued dashboard session token.
+const DASHBOARD_TOKEN_TTL_MS: i64 = 24 * 60 * 60 * 1000;
+
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
 }
 
 impl AppState {
@@ -188,7 +206,29 @@ impl AppState {
             log_bodies, cache_enabled, semantic_cache, semantic_settings,
             guardrail_config, content_shield_config, api_keys,
             model_pricing, mcp_config,
+            dashboard_tokens: Arc::new(RwLock::new(HashMap::new())),
+            login_attempts: Arc::new(Mutex::new(HashMap::new())),
         })
+    }
+
+    /// Issue a new dashboard session token, dropping any that have expired.
+    pub async fn issue_dashboard_token(&self) -> String {
+        let token = uuid::Uuid::new_v4().to_string();
+        let now = now_ms();
+        let mut map = self.dashboard_tokens.write().await;
+        map.retain(|_, exp| *exp > now);
+        map.insert(token.clone(), now + DASHBOARD_TOKEN_TTL_MS);
+        token
+    }
+
+    /// Validate a dashboard session token (present and not expired).
+    pub async fn validate_dashboard_token(&self, token: &str) -> bool {
+        if token.is_empty() {
+            return false;
+        }
+        let now = now_ms();
+        let map = self.dashboard_tokens.read().await;
+        map.get(token).is_some_and(|exp| *exp > now)
     }
 
     pub fn config(&self) -> Arc<GatewayConfig> {

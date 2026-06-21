@@ -8,7 +8,11 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-use crate::{handlers, mcp, middleware::auth, state::AppState};
+use crate::{
+    handlers, mcp,
+    middleware::{auth, dashboard_auth, login_rate_limit},
+    state::AppState,
+};
 
 pub fn build(state: AppState) -> Router {
     let cors = CorsLayer::new()
@@ -37,7 +41,14 @@ pub fn build(state: AppState) -> Router {
         .route("/config/models", get(handlers::models_config_get).put(handlers::models_config_put))
         .route("/config/providers", get(handlers::providers_config_get))
         .route("/config/mcp", get(mcp::mcp_config_get).put(mcp::mcp_config_put))
-        .route("/mcp/tools", get(mcp::mcp_tools_get));
+        .route("/mcp/tools", get(mcp::mcp_tools_get))
+        // Update status/upload are admin surfaces — keep them behind the same gate.
+        .route("/updates/status", get(crate::updates::updates_status))
+        .route("/updates/upload", post(crate::updates::updates_upload)
+            .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024)))
+        // Dashboard session token required for every route above. Without this,
+        // analytics/logs/storage/config were reachable unauthenticated.
+        .layer(middleware::from_fn_with_state(state.clone(), dashboard_auth));
 
     Router::new()
         .merge(api)
@@ -45,13 +56,11 @@ pub fn build(state: AppState) -> Router {
         .route("/mcp", post(mcp::mcp_endpoint))
         .route("/mcp-test", post(mcp::mcp_test_endpoint))
         .route("/health", get(handlers::health))
-        .route("/updates/status", get(crate::updates::updates_status))
         .route("/marketing/contact", post(crate::marketing::contact))
         .route("/marketing/download-request", post(crate::marketing::download_request))
-        .route("/updates/upload", post(crate::updates::updates_upload)
-            .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024)))
         .route("/metrics", get(handlers::metrics))
-        .route("/dashboard/login", post(handlers::dashboard_login))
+        .route("/dashboard/login", post(handlers::dashboard_login)
+            .layer(middleware::from_fn_with_state(state.clone(), login_rate_limit)))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state)

@@ -47,12 +47,30 @@ fn cache() -> &'static RwLock<Option<CachedStatus>> {
     CACHE.get_or_init(|| RwLock::new(None))
 }
 
+/// Reject plain-HTTP update sources (except loopback) so an update manifest
+/// can't be served/forged by a network attacker over an unauthenticated channel.
+fn is_transport_allowed(url: &str) -> bool {
+    if url.starts_with("https://") {
+        return true;
+    }
+    url.starts_with("http://127.0.0.1")
+        || url.starts_with("http://localhost")
+        || url.starts_with("http://[::1]")
+}
+
 async fn fetch_manifest() -> (Option<Value>, Option<String>) {
+    let url = manifest_url();
+    if !is_transport_allowed(&url) {
+        return (
+            None,
+            Some("refusing to fetch update manifest over insecure transport; set UPDATE_MANIFEST_URL to an https:// URL".to_string()),
+        );
+    }
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
         .build()
         .expect("reqwest client");
-    match client.get(manifest_url()).send().await {
+    match client.get(&url).send().await {
         Ok(resp) if resp.status().is_success() => match resp.json::<Value>().await {
             Ok(v) => (Some(v), None),
             Err(e) => (None, Some(format!("invalid manifest: {e}"))),
