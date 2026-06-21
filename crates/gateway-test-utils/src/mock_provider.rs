@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::{
@@ -64,6 +64,7 @@ impl MockConfig {
 struct MockState {
     config: Arc<MockConfig>,
     call_count: Arc<AtomicUsize>,
+    last_body: Arc<Mutex<Option<String>>>,
 }
 
 // ─── Public handle ────────────────────────────────────────────────────────────
@@ -72,16 +73,19 @@ pub struct MockProvider {
     /// HTTP base URL, e.g. `http://127.0.0.1:54321`
     pub base_url: String,
     call_count: Arc<AtomicUsize>,
+    last_body: Arc<Mutex<Option<String>>>,
     _handle: tokio::task::JoinHandle<()>,
 }
 
 impl MockProvider {
     pub async fn start(config: MockConfig) -> anyhow::Result<Self> {
         let call_count = Arc::new(AtomicUsize::new(0));
+        let last_body = Arc::new(Mutex::new(None));
 
         let state = MockState {
             config: Arc::new(config),
             call_count: Arc::clone(&call_count),
+            last_body: Arc::clone(&last_body),
         };
 
         let app = Router::new()
@@ -101,7 +105,7 @@ impl MockProvider {
             axum::serve(listener, app).await.ok();
         });
 
-        Ok(Self { base_url, call_count, _handle: handle })
+        Ok(Self { base_url, call_count, last_body, _handle: handle })
     }
 
     pub fn calls(&self) -> usize {
@@ -110,6 +114,13 @@ impl MockProvider {
 
     pub fn reset_calls(&self) {
         self.call_count.store(0, Ordering::SeqCst);
+    }
+
+    /// The raw request body of the most recent call this mock received.
+    /// Lets tests assert what the gateway actually forwarded upstream
+    /// (e.g. that Content Shield redacted PII before sending).
+    pub fn last_request_body(&self) -> Option<String> {
+        self.last_body.lock().unwrap().clone()
     }
 }
 
@@ -135,7 +146,8 @@ async fn handle_call(state: &MockState) -> Result<(), StatusCode> {
 
 // ─── Endpoint handlers ────────────────────────────────────────────────────────
 
-async fn handle_openai(State(s): State<MockState>) -> Response {
+async fn handle_openai(State(s): State<MockState>, body: String) -> Response {
+    *s.last_body.lock().unwrap() = Some(body);
     match handle_call(&s).await {
         Err(status) => (
             status,
@@ -162,7 +174,8 @@ async fn handle_openai(State(s): State<MockState>) -> Response {
     }
 }
 
-async fn handle_anthropic(State(s): State<MockState>) -> Response {
+async fn handle_anthropic(State(s): State<MockState>, body: String) -> Response {
+    *s.last_body.lock().unwrap() = Some(body);
     match handle_call(&s).await {
         Err(status) => (
             status,
@@ -185,7 +198,8 @@ async fn handle_anthropic(State(s): State<MockState>) -> Response {
     }
 }
 
-async fn handle_gemini(State(s): State<MockState>, Path(_path): Path<String>) -> Response {
+async fn handle_gemini(State(s): State<MockState>, Path(_path): Path<String>, body: String) -> Response {
+    *s.last_body.lock().unwrap() = Some(body);
     match handle_call(&s).await {
         Err(status) => (
             status,

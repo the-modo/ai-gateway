@@ -24,6 +24,7 @@ fn cfg(providers: Vec<ProviderConfig>, routes: Vec<RouteConfig>) -> GatewayConfi
             port: 0,
             request_timeout_ms: 5_000,
             max_connections: 8,
+            cors_allowed_origins: Vec::new(),
         },
         providers,
         routes,

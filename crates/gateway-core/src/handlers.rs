@@ -615,30 +615,36 @@ pub(crate) fn make_log(
 }
 
 fn estimate_cost_dynamic(model: &str, prompt: i64, completion: i64, pricing: &[ModelPricing]) -> f64 {
-    // Try to find in config first (exact match or suffix match)
-    if let Some(m) = pricing.iter().find(|m| m.enabled && (model == m.id || model.ends_with(&*m.id) || m.id.ends_with(model))) {
+    // Exact (case-insensitive) catalog match only. Loose suffix matching caused
+    // bogus models like "sad/gpt-4o" to be billed at gpt-4o rates (#18).
+    if let Some(m) = pricing.iter().find(|m| m.enabled && m.id.eq_ignore_ascii_case(model)) {
         return prompt as f64 * m.input_per_1m / 1_000_000.0 + completion as f64 * m.output_per_1m / 1_000_000.0;
     }
-    // Fall back to built-in defaults
+    // Fall back to built-in family defaults (also anchored — see estimate_cost).
     estimate_cost(model, prompt, completion)
 }
 
 fn estimate_cost(model: &str, prompt: i64, completion: i64) -> f64 {
-    let (p, c) = if model.contains("gpt-4o-mini") {
+    // Anchor family matching to the start of the model id so a bogus model such
+    // as "sad/gpt-4o" is NOT billed at gpt-4o rates (#18). Real provider-prefixed
+    // ids (e.g. "openai/gpt-4o") should be priced via the catalog (exact match).
+    let m = model.to_ascii_lowercase();
+    let has = |fam: &str| m == fam || m.starts_with(&format!("{fam}-")) || m.starts_with(&format!("{fam}."));
+    let (p, c) = if has("gpt-4o-mini") {
         (0.15, 0.60)
-    } else if model.contains("gpt-4o") {
+    } else if has("gpt-4o") {
         (5.0, 15.0)
-    } else if model.contains("claude-opus") {
+    } else if has("claude-opus") {
         (15.0, 75.0)
-    } else if model.contains("claude-sonnet") {
+    } else if has("claude-sonnet") {
         (3.0, 15.0)
-    } else if model.contains("claude-haiku") {
+    } else if has("claude-haiku") {
         (0.25, 1.25)
-    } else if model.contains("gemini-1.5-pro") {
+    } else if has("gemini-1.5-pro") {
         (3.5, 10.5)
-    } else if model.contains("gemini") {
+    } else if m == "gemini" || m.starts_with("gemini-") {
         (0.075, 0.30)
-    } else if model.contains("o1") {
+    } else if has("o1") {
         (15.0, 60.0)
     } else {
         (1.0, 3.0)
@@ -1034,6 +1040,20 @@ pub async fn dashboard_login(
     } else {
         (StatusCode::UNAUTHORIZED, Json(json!({ "error": "Invalid credentials" }))).into_response()
     }
+}
+
+/// Revoke the caller's dashboard session token (logout).
+pub async fn dashboard_logout(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    let token = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .unwrap_or("");
+    state.revoke_dashboard_token(token).await;
+    (StatusCode::OK, Json(json!({ "ok": true })))
 }
 
 // ─── API Keys CRUD ────────────────────────────────────────────────────────────

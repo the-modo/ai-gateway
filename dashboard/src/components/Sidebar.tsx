@@ -1,11 +1,13 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ScrollText, Server, Settings,
-  GitBranch, BarChart2, ShieldAlert, Lock, KeyRound, Play,
+  GitBranch, BarChart2, ShieldAlert, Lock, KeyRound, Play, LogOut,
 } from 'lucide-react'
 import clsx from 'clsx'
+import { getToken, clearSession } from '@/lib/auth'
+import { getGatewayBase } from '@/lib/config'
 
 /** Official Model Context Protocol mark (Simple Icons). */
 export function McpIcon({ size = 14, className = '' }: { size?: number; className?: string }) {
@@ -32,6 +34,20 @@ const nav = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    const token = getToken()
+    // Best-effort server-side revoke; always clear the local session.
+    try {
+      await fetch(`${getGatewayBase()}/dashboard/logout`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+    } catch { /* ignore network errors on logout */ }
+    clearSession()
+    router.replace('/login')
+  }
 
   return (
     <aside className="glass-sidebar fixed left-0 top-0 h-full w-56 flex flex-col z-40">
@@ -61,6 +77,16 @@ export default function Sidebar() {
         })}
       </nav>
 
+      {/* Footer — logout */}
+      <div className="px-3 py-3 border-t bd">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium t2 hover:t1 hover:bg-[var(--glass-hover)] transition-all duration-200"
+        >
+          <LogOut size={14} />
+          Log out
+        </button>
+      </div>
     </aside>
   )
 }

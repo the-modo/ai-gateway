@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GatewayConfig {
     pub server: ServerConfig,
+    #[serde(default)]
     pub providers: Vec<ProviderConfig>,
+    #[serde(default)]
     pub routes: Vec<RouteConfig>,
     pub cache: CacheConfig,
     pub telemetry: TelemetryConfig,
@@ -35,6 +37,10 @@ pub struct ServerConfig {
     pub port: u16,
     pub request_timeout_ms: u64,
     pub max_connections: usize,
+    /// Allowed CORS origins. Empty = permissive (`*`, legacy behaviour); set to
+    /// the dashboard origin(s) to lock down cross-origin access (#3).
+    #[serde(default)]
+    pub cors_allowed_origins: Vec<String>,
 }
 
 impl Default for ServerConfig {
@@ -44,6 +50,7 @@ impl Default for ServerConfig {
             port: 8080,
             request_timeout_ms: 30_000,
             max_connections: 10_000,
+            cors_allowed_origins: Vec::new(),
         }
     }
 }

@@ -10,15 +10,22 @@ use tower_http::{
 
 use crate::{
     handlers, mcp, perf,
-    middleware::{auth, dashboard_auth, login_rate_limit},
+    middleware::{auth, dashboard_auth, login_rate_limit, security_headers},
     state::AppState,
 };
 
 pub fn build(state: AppState) -> Router {
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    // Restrict CORS to configured origins when set; otherwise stay permissive
+    // for backward compatibility (#3). `allow_headers(Any)` is kept so the
+    // Authorization-header preflight from the dashboard still succeeds.
+    let allowed = state.config().server.cors_allowed_origins.clone();
+    let cors = if allowed.is_empty() {
+        CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
+    } else {
+        let origins: Vec<axum::http::HeaderValue> =
+            allowed.iter().filter_map(|o| o.parse().ok()).collect();
+        CorsLayer::new().allow_origin(origins).allow_methods(Any).allow_headers(Any)
+    };
 
     let api = Router::new()
         .route("/v1/chat/completions", post(handlers::chat_completions))
@@ -65,6 +72,8 @@ pub fn build(state: AppState) -> Router {
         .route("/metrics", get(handlers::metrics))
         .route("/dashboard/login", post(handlers::dashboard_login)
             .layer(middleware::from_fn_with_state(state.clone(), login_rate_limit)))
+        .route("/dashboard/logout", post(handlers::dashboard_logout))
+        .layer(middleware::from_fn(security_headers))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state)
