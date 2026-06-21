@@ -390,3 +390,67 @@ export function bestInterval(from: number, to: number): number {
   if (span <= 86_400_000) return 3_600_000    // 1h buckets for ≤24h
   return 86_400_000                            // 1d buckets otherwise
 }
+
+// ─── Routes + provider enable/disable (issue #20) ───────────────────────────
+//
+// Persist the dashboard's canvas-state for LLM and MCP routes server-side so
+// they survive reloads, sync across browsers/devices, and are visible to other
+// admins. The route blob itself is opaque to the gateway — it stores + serves
+// the JSON verbatim — but the disabled-vendor list IS enforced at chat-route
+// time (providers whose kind is in the set are skipped).
+
+export async function fetchRoutes(): Promise<any | null> {
+  try {
+    const r = await fetch(`${base()}/config/routes`, { cache: 'no-store' })
+    return r.ok ? r.json() : null
+  } catch { return null }
+}
+
+export async function saveRoutes(routes: any): Promise<boolean> {
+  try {
+    const r = await fetch(`${base()}/config/routes`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(routes),
+    })
+    return r.ok
+  } catch { return false }
+}
+
+export async function fetchMcpRoutes(): Promise<any | null> {
+  try {
+    const r = await fetch(`${base()}/config/mcp-routes`, { cache: 'no-store' })
+    return r.ok ? r.json() : null
+  } catch { return null }
+}
+
+export async function saveMcpRoutes(routes: any): Promise<boolean> {
+  try {
+    const r = await fetch(`${base()}/config/mcp-routes`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(routes),
+    })
+    return r.ok
+  } catch { return false }
+}
+
+export async function fetchDisabledVendors(): Promise<string[]> {
+  try {
+    const r = await fetch(`${base()}/config/providers/disabled`, { cache: 'no-store' })
+    if (!r.ok) return []
+    const data = await r.json()
+    return Array.isArray(data?.disabled) ? data.disabled : []
+  } catch { return [] }
+}
+
+export async function saveDisabledVendors(disabled: string[]): Promise<boolean> {
+  try {
+    const r = await fetch(`${base()}/config/providers/disabled`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disabled }),
+    })
+    return r.ok
+  } catch { return false }
+}

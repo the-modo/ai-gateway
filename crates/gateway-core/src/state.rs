@@ -116,6 +116,18 @@ pub struct AppState {
     pub login_attempts: Arc<Mutex<HashMap<String, (i64, u32)>>>,
     /// In-memory history of performance evaluation runs.
     pub perf_runs: crate::perf::PerfStore,
+    /// Vendor IDs (matching ProviderKind serde-lowercase) the operator has
+    /// toggled off in the dashboard. Providers whose `kind` is in this set
+    /// are skipped at route-time. Stored under config key `providers-disabled`.
+    pub disabled_vendors: Arc<RwLock<std::collections::HashSet<String>>>,
+    /// Opaque dashboard payload for LLM routes (canvas state, conditions,
+    /// fallbacks, etc.). Persisted under `routes`; the gateway only stores
+    /// + serves the blob — the routing engine still keys off
+    /// `gateway.toml [[routes]]` for now (separate follow-up to actually
+    /// enforce dashboard-edited routes at request time).
+    pub routes_json: Arc<RwLock<serde_json::Value>>,
+    /// Same as `routes_json` but for MCP routes (`mcp-routes` config key).
+    pub mcp_routes_json: Arc<RwLock<serde_json::Value>>,
 }
 
 /// Lifetime of an issued dashboard session token.
@@ -208,6 +220,28 @@ impl AppState {
             }
         }
 
+        // ── Routes / MCP routes / disabled vendors (issue #20) ──────────────
+        let disabled_vendors = Arc::new(RwLock::new(std::collections::HashSet::<String>::new()));
+        let routes_json     = Arc::new(RwLock::new(serde_json::json!([])));
+        let mcp_routes_json = Arc::new(RwLock::new(serde_json::json!([])));
+        if let Some(pool) = &db {
+            if let Ok(Some(json)) = gateway_storage::queries::config_load(pool, "providers-disabled").await {
+                if let Ok(v) = serde_json::from_str::<Vec<String>>(&json) {
+                    *disabled_vendors.write().await = v.into_iter().collect();
+                }
+            }
+            if let Ok(Some(json)) = gateway_storage::queries::config_load(pool, "routes").await {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json) {
+                    *routes_json.write().await = v;
+                }
+            }
+            if let Ok(Some(json)) = gateway_storage::queries::config_load(pool, "mcp-routes").await {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json) {
+                    *mcp_routes_json.write().await = v;
+                }
+            }
+        }
+
         Ok(Self {
             config, providers, cache, logger, db, db_backend,
             log_bodies, cache_enabled, semantic_cache, semantic_settings,
@@ -216,6 +250,7 @@ impl AppState {
             dashboard_tokens: Arc::new(RwLock::new(HashMap::new())),
             login_attempts: Arc::new(Mutex::new(HashMap::new())),
             perf_runs: crate::perf::PerfStore::default(),
+            disabled_vendors, routes_json, mcp_routes_json,
         })
     }
 

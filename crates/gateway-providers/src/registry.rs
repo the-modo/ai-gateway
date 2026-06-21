@@ -30,6 +30,10 @@ impl LatencyEma {
 
 pub struct ProviderRegistry {
     providers:   HashMap<String, Arc<dyn Provider>>,
+    /// provider-name → serde-lowercase ProviderKind (e.g. "openai", "anthropic"),
+    /// so the routing layer can filter out providers whose vendor was disabled
+    /// from the dashboard without each Provider implementation exposing a kind.
+    kinds:       HashMap<String, String>,
     routes:      Vec<RouteConfig>,
     rr_counter:  AtomicUsize,
     latency:     Mutex<HashMap<String, LatencyEma>>,
@@ -38,9 +42,15 @@ pub struct ProviderRegistry {
 impl ProviderRegistry {
     pub fn from_config(config: &GatewayConfig) -> anyhow::Result<Self> {
         let mut providers = HashMap::new();
+        let mut kinds = HashMap::new();
 
         for cfg in &config.providers {
             let api_key = resolve_api_key(cfg);
+            let kind_str = serde_json::to_value(&cfg.kind)
+                .ok()
+                .and_then(|v| v.as_str().map(str::to_owned))
+                .unwrap_or_else(|| "custom".to_string());
+            kinds.insert(cfg.name.clone(), kind_str);
             let provider: Arc<dyn Provider> = match cfg.kind {
                 ProviderKind::OpenAI
                 | ProviderKind::Groq
@@ -75,10 +85,17 @@ impl ProviderRegistry {
 
         Ok(Self {
             providers,
+            kinds,
             routes:     config.routes.clone(),
             rr_counter: AtomicUsize::new(0),
             latency:    Mutex::new(HashMap::new()),
         })
+    }
+
+    /// Vendor kind string (lowercase, e.g. "openai") for a configured
+    /// provider name, or `None` if the name isn't registered.
+    pub fn kind_of(&self, provider_name: &str) -> Option<&str> {
+        self.kinds.get(provider_name).map(String::as_str)
     }
 
     pub fn get(&self, name: &str) -> Option<Arc<dyn Provider>> {

@@ -375,7 +375,24 @@ pub async fn chat_completions(
         }
     }
 
-    let providers = state.providers.ordered_providers(&req.model);
+    // Filter out providers whose vendor kind was disabled from the dashboard
+    // (issue #20). The disabled-set is keyed by ProviderKind serde-lowercase
+    // ("openai", "anthropic", …) and tracked at `state.disabled_vendors`.
+    let providers: Vec<_> = {
+        let disabled = state.disabled_vendors.read().await;
+        state
+            .providers
+            .ordered_providers(&req.model)
+            .into_iter()
+            .filter(|p| {
+                state
+                    .providers
+                    .kind_of(p.name())
+                    .map(|k| !disabled.contains(k))
+                    .unwrap_or(true)
+            })
+            .collect()
+    };
     if providers.is_empty() {
         return Err(GatewayError::not_found(format!(
             "No provider configured for model '{}'",
@@ -1157,4 +1174,84 @@ pub async fn providers_config_get(State(state): State<AppState>) -> Json<serde_j
 fn range(from: Option<i64>, to: Option<i64>) -> (i64, i64) {
     let (df, dt) = default_range();
     (from.unwrap_or(df), to.unwrap_or(dt))
+}
+
+// ─── Routes / MCP routes / disabled vendors (issue #20) ─────────────────────
+//
+// `/config/routes` and `/config/mcp-routes` store the dashboard's canvas
+// payload verbatim (opaque JSON). The routing engine still keys off
+// `gateway.toml [[routes]]` for actual request dispatch — these endpoints
+// just give the dashboard a place to persist + sync its UI state across
+// browsers, fixing the localStorage-only behaviour from #20.
+//
+// `/config/providers/disabled` IS enforced: providers whose `kind` matches
+// any entry are skipped by `chat_completions`.
+
+pub async fn routes_config_get(State(state): State<AppState>) -> Json<serde_json::Value> {
+    Json(state.routes_json.read().await.clone())
+}
+
+pub async fn routes_config_put(
+    State(state): State<AppState>,
+    Json(body): Json<serde_json::Value>,
+) -> Json<serde_json::Value> {
+    {
+        let mut guard = state.routes_json.write().await;
+        *guard = body;
+    }
+    if let Some(pool) = &state.db {
+        if let Ok(json) = serde_json::to_string(&*state.routes_json.read().await) {
+            let _ = storage_queries::config_save(pool, "routes", &json).await;
+        }
+    }
+    Json(json!({ "ok": true }))
+}
+
+pub async fn mcp_routes_config_get(State(state): State<AppState>) -> Json<serde_json::Value> {
+    Json(state.mcp_routes_json.read().await.clone())
+}
+
+pub async fn mcp_routes_config_put(
+    State(state): State<AppState>,
+    Json(body): Json<serde_json::Value>,
+) -> Json<serde_json::Value> {
+    {
+        let mut guard = state.mcp_routes_json.write().await;
+        *guard = body;
+    }
+    if let Some(pool) = &state.db {
+        if let Ok(json) = serde_json::to_string(&*state.mcp_routes_json.read().await) {
+            let _ = storage_queries::config_save(pool, "mcp-routes", &json).await;
+        }
+    }
+    Json(json!({ "ok": true }))
+}
+
+#[derive(serde::Deserialize)]
+pub struct DisabledVendorsBody {
+    pub disabled: Vec<String>,
+}
+
+pub async fn providers_disabled_get(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let set = state.disabled_vendors.read().await;
+    let mut list: Vec<String> = set.iter().cloned().collect();
+    list.sort();
+    Json(json!({ "disabled": list }))
+}
+
+pub async fn providers_disabled_put(
+    State(state): State<AppState>,
+    Json(body): Json<DisabledVendorsBody>,
+) -> Json<serde_json::Value> {
+    {
+        let mut guard = state.disabled_vendors.write().await;
+        *guard = body.disabled.into_iter().collect();
+    }
+    if let Some(pool) = &state.db {
+        let list: Vec<String> = state.disabled_vendors.read().await.iter().cloned().collect();
+        if let Ok(json) = serde_json::to_string(&list) {
+            let _ = storage_queries::config_save(pool, "providers-disabled", &json).await;
+        }
+    }
+    Json(json!({ "ok": true, "count": state.disabled_vendors.read().await.len() }))
 }

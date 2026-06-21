@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronUp, Zap, Box, RefreshCw, Save, Trash2,
 } from 'lucide-react'
 import { VENDORS, type VendorMeta } from '@/lib/vendors'
-import { fetchModelsConfig, updateModelsConfig, fetchGatewayProviders, type ModelPricingEntry, type GatewayProviderInfo } from '@/lib/api'
+import { fetchModelsConfig, updateModelsConfig, fetchGatewayProviders, fetchDisabledVendors, saveDisabledVendors, type ModelPricingEntry, type GatewayProviderInfo } from '@/lib/api'
 import clsx from 'clsx'
 
 // ─── Toggle ───────────────────────────────────────────────────────────────────
@@ -170,9 +170,47 @@ function AddModelInline({ provider, onAdd }: { provider: string; onAdd: (m: Mode
 
 // ─── Provider card ────────────────────────────────────────────────────────────
 
+// Server-backed disabled-vendor set (issue #20). The gateway enforces it
+// — providers whose `kind` is in the set are skipped at chat-route time.
+// We mirror it into module-scoped state so per-card components don't all
+// need their own fetch on mount.
+let _disabledVendors: Set<string> = new Set()
+let _disabledLoaded = false
+const _disabledListeners = new Set<() => void>()
+
+async function loadDisabledVendorsOnce(): Promise<Set<string>> {
+  if (_disabledLoaded) return _disabledVendors
+  _disabledLoaded = true
+  // Bring across any legacy localStorage value on first run.
+  if (typeof window !== 'undefined') {
+    try {
+      const legacy = localStorage.getItem('gw-disabled-vendors')
+      if (legacy) {
+        const arr = JSON.parse(legacy) as string[]
+        if (Array.isArray(arr) && arr.length > 0) {
+          await saveDisabledVendors(arr)
+          localStorage.removeItem('gw-disabled-vendors')
+          _disabledVendors = new Set(arr)
+          _disabledListeners.forEach(fn => fn())
+          return _disabledVendors
+        }
+      }
+    } catch {}
+  }
+  _disabledVendors = new Set(await fetchDisabledVendors())
+  _disabledListeners.forEach(fn => fn())
+  return _disabledVendors
+}
+
 function disabledVendors(): string[] {
-  if (typeof window === 'undefined') return []
-  try { return JSON.parse(localStorage.getItem('gw-disabled-vendors') ?? '[]') } catch { return [] }
+  return [..._disabledVendors]
+}
+
+async function setDisabled(vendorId: string, disable: boolean) {
+  if (disable) _disabledVendors.add(vendorId)
+  else _disabledVendors.delete(vendorId)
+  await saveDisabledVendors([..._disabledVendors])
+  _disabledListeners.forEach(fn => fn())
 }
 
 type Tab = 'auth' | 'perf' | 'limits' | 'headers' | 'models'
@@ -194,17 +232,24 @@ function ProviderCard({ v, instances, providerModels, onModelsChange, onSaveMode
   const [tab,      setTab]      = useState<Tab>('auth')
 
   // Active = the gateway actually has this provider configured AND not
-  // manually disabled by the user (persisted so Routing respects it too).
+  // manually disabled by the user. The disabled set is persisted on the
+  // gateway and enforced at route-time (issue #20).
   useEffect(() => {
-    setEnabled(instances.length > 0 && !disabledVendors().includes(v.id))
+    let live = true
+    loadDisabledVendorsOnce().then(set => {
+      if (live) setEnabled(instances.length > 0 && !set.has(v.id))
+    })
+    const rerender = () => {
+      if (live) setEnabled(instances.length > 0 && !_disabledVendors.has(v.id))
+    }
+    _disabledListeners.add(rerender)
+    return () => { live = false; _disabledListeners.delete(rerender) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instances.length])
 
-  const handleEnabledChange = (val: boolean) => {
+  const handleEnabledChange = async (val: boolean) => {
     setEnabled(val)
-    const cur = new Set(disabledVendors())
-    if (val) cur.delete(v.id); else cur.add(v.id)
-    localStorage.setItem('gw-disabled-vendors', JSON.stringify([...cur]))
+    await setDisabled(v.id, !val)
   }
 
   const [timeout,  setTimeout_] = useState('30000')

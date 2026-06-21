@@ -1334,6 +1334,9 @@ function migrateEdges(edges: Edge[], nodes: Node[]): Edge[] {
     return { ...e, type: 'hover', ...style }
   })
 }
+// Synchronous seed for the initial render. The canvas re-hydrates from the
+// gateway in a useEffect below (issue #20) so the bundle still works before
+// the network call settles.
 function loadRoutes(): RouteConfig[] {
   if (typeof window === 'undefined') return INITIAL_ROUTES
   try {
@@ -1512,13 +1515,41 @@ function CanvasInner({ initialRouteId, onBack }: { initialRouteId?: string; onBa
     const t = setTimeout(() => setClearConfirm(false), 3000); return () => clearTimeout(t)
   }, [clearConfirm])
   useEffect(() => {
-    try {
-      const merged = routes.map(r =>
-        r.id === activeRouteId ? { ...r, nodes:[...nodes], edges:[...edges] } : r
-      )
-      localStorage.setItem(LS_KEY, JSON.stringify(merged))
-    } catch {}
+    const merged = routes.map(r =>
+      r.id === activeRouteId ? { ...r, nodes:[...nodes], edges:[...edges] } : r
+    )
+    // Persist server-side so the route survives reload AND is visible to
+    // other admins / other browsers (issue #20).
+    const base = getGatewayBase()
+    fetch(`${base}/config/routes`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(merged),
+    }).catch(() => {})
+    try { localStorage.removeItem(LS_KEY) } catch {}
   }, [routes, nodes, edges, activeRouteId])
+
+  // Hydrate from the gateway on mount so an admin who edited routes in
+  // another browser sees them here.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await fetch(`${getGatewayBase()}/config/routes`, { cache: 'no-store' })
+        if (!r.ok) return
+        const remote = await r.json()
+        if (cancelled || !Array.isArray(remote) || remote.length === 0) return
+        setRoutes(remote.map(rt => ({ ...rt, edges: migrateEdges(rt.edges, rt.nodes) })))
+        const active = remote.find((rt: any) => rt.id === activeRouteId) ?? remote[0]
+        if (active) {
+          setNodes(active.nodes)
+          setEdges(migrateEdges(active.edges, active.nodes))
+        }
+      } catch {}
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const base = getGatewayBase()

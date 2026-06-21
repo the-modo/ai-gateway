@@ -47,6 +47,9 @@ pub fn build(state: AppState) -> Router {
         .route("/config/api-keys/:id", put(handlers::api_keys_update).delete(handlers::api_keys_delete))
         .route("/config/models", get(handlers::models_config_get).put(handlers::models_config_put))
         .route("/config/providers", get(handlers::providers_config_get))
+        .route("/config/providers/disabled", get(handlers::providers_disabled_get).put(handlers::providers_disabled_put))
+        .route("/config/routes",     get(handlers::routes_config_get).put(handlers::routes_config_put))
+        .route("/config/mcp-routes", get(handlers::mcp_routes_config_get).put(handlers::mcp_routes_config_put))
         .route("/config/mcp", get(mcp::mcp_config_get).put(mcp::mcp_config_put))
         .route("/mcp/tools", get(mcp::mcp_tools_get))
         // Performance evaluation — same admin auth gate as /config/*.

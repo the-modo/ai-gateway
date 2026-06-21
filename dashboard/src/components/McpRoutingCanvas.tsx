@@ -27,6 +27,9 @@ export interface McpRouteConfig {
 
 export const LS_MCP_ROUTES = 'ai-gateway:mcp-routes'
 
+// Synchronous fallback (used for first paint and SSR-safety). Real source
+// of truth is the gateway under /config/mcp-routes — fetched on mount by
+// the canvas; saves go through PUT (issue #20).
 export function loadMcpRoutes(): McpRouteConfig[] {
   if (typeof window === 'undefined') return []
   try {
@@ -36,7 +39,18 @@ export function loadMcpRoutes(): McpRouteConfig[] {
 }
 
 export function saveMcpRoutes(routes: McpRouteConfig[]) {
-  try { localStorage.setItem(LS_MCP_ROUTES, JSON.stringify(routes)) } catch {}
+  // Persist server-side for cross-browser sync + actual gateway visibility.
+  try {
+    const base = typeof window === 'undefined'
+      ? 'http://localhost:4891'
+      : (window.location.protocol === 'https:' ? '' : `http://${window.location.hostname}:4891`)
+    fetch(`${base}/config/mcp-routes`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(routes),
+    }).catch(() => {})
+  } catch {}
+  try { localStorage.removeItem(LS_MCP_ROUTES) } catch {}
 }
 
 /* ─── Edge styling — colored + glow per source handle ─────────────────────── */

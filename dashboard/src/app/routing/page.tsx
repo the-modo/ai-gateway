@@ -9,6 +9,7 @@ import {
 import clsx from 'clsx'
 import { VENDORS } from '@/lib/vendors'
 import { McpIcon } from '@/components/Sidebar'
+import { fetchRoutes, saveRoutes as saveRoutesApi, fetchMcpRoutes, saveMcpRoutes as saveMcpRoutesApi } from '@/lib/api'
 
 /* ─── Dynamic canvas import ──────────────────────────────────────────────── */
 const McpRoutingCanvas = dynamic(() => import('@/components/McpRoutingCanvas'), {
@@ -60,16 +61,32 @@ const SEED_ROUTE: RouteConfig = {
   ],
 }
 
-function loadRoutes(): RouteConfig[] {
-  if (typeof window === 'undefined') return [SEED_ROUTE]
-  try {
-    const s = localStorage.getItem(LS_ROUTES)
-    return s ? JSON.parse(s) : [SEED_ROUTE]
-  } catch { return [SEED_ROUTE] }
+// Server-backed (issue #20). Falls back to the localStorage seed on first
+// load so users with existing routes still see them; on the next save the
+// blob lands on the gateway and the LS copy goes stale.
+async function loadRoutes(): Promise<RouteConfig[]> {
+  const server = await fetchRoutes()
+  if (Array.isArray(server) && server.length > 0) return server
+  if (typeof window !== 'undefined') {
+    try {
+      const s = localStorage.getItem(LS_ROUTES)
+      if (s) {
+        const local = JSON.parse(s) as RouteConfig[]
+        if (Array.isArray(local) && local.length > 0) {
+          // Migrate the local-only routes up to the gateway, then keep them.
+          await saveRoutesApi(local)
+          return local
+        }
+      }
+    } catch {}
+  }
+  return [SEED_ROUTE]
 }
 
-function saveRoutes(routes: RouteConfig[]) {
-  try { localStorage.setItem(LS_ROUTES, JSON.stringify(routes)) } catch {}
+async function saveRoutes(routes: RouteConfig[]) {
+  await saveRoutesApi(routes)
+  // Drop the stale LS copy so we never silently fall back to it again.
+  try { localStorage.removeItem(LS_ROUTES) } catch {}
 }
 
 /* ─── MCP route storage ──────────────────────────────────────────────────── */
@@ -89,15 +106,26 @@ const SEED_MCP_ROUTE: McpRouteConfig = {
   ],
 }
 
-function loadMcpRoutesLS(): McpRouteConfig[] {
-  if (typeof window === 'undefined') return [SEED_MCP_ROUTE]
-  try {
-    const s = localStorage.getItem(LS_MCP_ROUTES)
-    return s ? JSON.parse(s) : [SEED_MCP_ROUTE]
-  } catch { return [SEED_MCP_ROUTE] }
+async function loadMcpRoutesLS(): Promise<McpRouteConfig[]> {
+  const server = await fetchMcpRoutes()
+  if (Array.isArray(server) && server.length > 0) return server
+  if (typeof window !== 'undefined') {
+    try {
+      const s = localStorage.getItem(LS_MCP_ROUTES)
+      if (s) {
+        const local = JSON.parse(s) as McpRouteConfig[]
+        if (Array.isArray(local) && local.length > 0) {
+          await saveMcpRoutesApi(local)
+          return local
+        }
+      }
+    } catch {}
+  }
+  return [SEED_MCP_ROUTE]
 }
-function saveMcpRoutesLS(routes: McpRouteConfig[]) {
-  try { localStorage.setItem(LS_MCP_ROUTES, JSON.stringify(routes)) } catch {}
+async function saveMcpRoutesLS(routes: McpRouteConfig[]) {
+  await saveMcpRoutesApi(routes)
+  try { localStorage.removeItem(LS_MCP_ROUTES) } catch {}
 }
 
 function loadKeyCounts(): Map<string, number> {
@@ -319,22 +347,23 @@ function McpRouteCard({ route, onClick, onDelete }: {
 function McpRoutingSection({ onEdit, onNew }: { onEdit: (id: string) => void; onNew: () => void }) {
   const [routes, setRoutes] = useState<McpRouteConfig[]>([])
   useEffect(() => {
-    let r = loadMcpRoutesLS()
-    // Migrate the old seeded default (rate-limit demo) to the canonical
-    // request → MCP all tools → response shape.
-    const def = r.find(x => x.id === 'mcp-default')
-    if (def && !def.nodes.some((n: any) => n.type === 'mcpServer')) {
-      r = r.map(x => x.id === 'mcp-default' ? SEED_MCP_ROUTE : x)
-      saveMcpRoutesLS(r)
-    }
-    setRoutes(r)
-    if (!localStorage.getItem(LS_MCP_ROUTES)) saveMcpRoutesLS(r)
+    (async () => {
+      let r = await loadMcpRoutesLS()
+      // Migrate the old seeded default (rate-limit demo) to the canonical
+      // request → MCP all tools → response shape.
+      const def = r.find(x => x.id === 'mcp-default')
+      if (def && !def.nodes.some((n: any) => n.type === 'mcpServer')) {
+        r = r.map(x => x.id === 'mcp-default' ? SEED_MCP_ROUTE : x)
+        await saveMcpRoutesLS(r)
+      }
+      setRoutes(r)
+    })()
   }, [])
 
-  const deleteRoute = (id: string) => {
+  const deleteRoute = async (id: string) => {
     const updated = routes.filter(r => r.id !== id)
     setRoutes(updated)
-    saveMcpRoutesLS(updated)
+    await saveMcpRoutesLS(updated)
   }
 
   return (
@@ -385,12 +414,14 @@ function RouteListPage({ onEdit, onNewRoute, onEditMcp, onNewMcpRoute }: { onEdi
   const [newRouteName, setNewRouteName]   = useState('')
 
   useEffect(() => {
-    setRoutes(loadRoutes())
-    setKeyCounts(loadKeyCounts())
+    (async () => {
+      setRoutes(await loadRoutes())
+      setKeyCounts(loadKeyCounts())
+    })()
   }, [])
 
-  const persist = (updated: RouteConfig[]) => { setRoutes(updated); saveRoutes(updated) }
-  const deleteRoute = (id: string) => persist(routes.filter(r => r.id !== id))
+  const persist = async (updated: RouteConfig[]) => { setRoutes(updated); await saveRoutes(updated) }
+  const deleteRoute = (id: string) => { void persist(routes.filter(r => r.id !== id)) }
 
   const handleNewRouteSubmit = () => {
     const name = newRouteName.trim() || `Route ${routes.filter(r => !r.isDefault).length + 1}`
@@ -491,8 +522,8 @@ export default function RoutingPage() {
     setView('mcpCanvas')
   }
 
-  const handleNewMcpRoute = () => {
-    const routes = loadMcpRoutesLS()
+  const handleNewMcpRoute = async () => {
+    const routes = await loadMcpRoutesLS()
     const id = `mcp-route-${Date.now()}`
     routes.push({
       id, name: `MCP Route ${routes.length + 1}`, enabled: true,
@@ -502,7 +533,7 @@ export default function RoutingPage() {
       ],
       edges: [],
     })
-    saveMcpRoutesLS(routes)
+    await saveMcpRoutesLS(routes)
     setMcpRouteId(id)
     setView('mcpCanvas')
   }
@@ -512,8 +543,8 @@ export default function RoutingPage() {
     setView('canvas')
   }
 
-  const handleNewRoute = (name: string) => {
-    const routes = loadRoutes()
+  const handleNewRoute = async (name: string) => {
+    const routes = await loadRoutes()
     const id  = `route-${Date.now()}`
     const newRoute: RouteConfig = {
       id, name, enabled: true, isDefault: false,
@@ -523,7 +554,7 @@ export default function RoutingPage() {
       ],
       edges: [],
     }
-    saveRoutes([...routes, newRoute])
+    await saveRoutes([...routes, newRoute])
     setCanvasRouteId(id)
     setView('canvas')
   }
