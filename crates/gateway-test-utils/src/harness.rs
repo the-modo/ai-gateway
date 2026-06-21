@@ -242,6 +242,7 @@ impl HarnessBuilder {
                 port: 0, // we bind the listener ourselves
                 request_timeout_ms: 10_000,
                 max_connections: 128,
+                cors_allowed_origins: Vec::new(),
             },
             providers: provider_cfgs,
             routes: vec![RouteConfig {

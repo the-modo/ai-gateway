@@ -282,12 +282,14 @@ pub async fn mcp_endpoint(
 
         "tools/call" => {
             let call_start = std::time::Instant::now();
+            let mut flag_label: Option<String> = None;
             let log_call = |state: &AppState, tool: &str, status: i32, latency: i64,
-                            err: Option<String>, req_body: Option<String>, resp_body: Option<String>| {
+                            err: Option<String>, flags: Option<String>,
+                            req_body: Option<String>, resp_body: Option<String>| {
                 if let Some(ref logger) = state.logger {
                     logger.log(make_log(
                         tool, "mcp", status, latency, 0, 0, false, false,
-                        err, None, req_body, resp_body, &[],
+                        err, flags, req_body, resp_body, &[],
                     ));
                 }
             };
@@ -326,11 +328,12 @@ pub async fn mcp_endpoint(
                     GuardrailOutcome::Blocked(label) => {
                         warn!(rule = %label, tool = tool_name, "Guardrail blocked MCP tool call");
                         log_call(&state, &full_name_owned, 400, call_start.elapsed().as_millis() as i64,
-                            Some(format!("Blocked by guardrail: {label}")), args_body.clone(), None);
+                            Some(format!("Blocked by guardrail: {label}")), None, args_body.clone(), None);
                         return rpc_error(id, -32600, format!("Blocked by guardrail: {label}")).into_response();
                     }
                     GuardrailOutcome::Flagged(label) => {
                         warn!(rule = %label, tool = tool_name, "Guardrail flagged MCP tool call");
+                        flag_label = Some(format!("guardrail:{label}"));
                     }
                     GuardrailOutcome::Pass => {}
                 }
@@ -346,7 +349,7 @@ pub async fn mcp_endpoint(
                 if let Err(label) = shield_json(args, &req_rules, &builtin) {
                     warn!(rule = %label, tool = tool_name, "Content Shield blocked MCP tool call");
                     log_call(&state, &full_name_owned, 400, call_start.elapsed().as_millis() as i64,
-                        Some(format!("Blocked by Content Shield: {label}")), args_body.clone(), None);
+                        Some(format!("Blocked by Content Shield: {label}")), None, args_body.clone(), None);
                     return rpc_error(id, -32600, format!("Blocked by Content Shield: {label}")).into_response();
                 }
             }
@@ -362,11 +365,12 @@ pub async fn mcp_endpoint(
                             GuardrailOutcome::Blocked(label) => {
                                 warn!(rule = %label, tool = tool_name, "Guardrail blocked MCP tool result");
                                 log_call(&state, &full_name_owned, 400, call_start.elapsed().as_millis() as i64,
-                                    Some(format!("Response blocked by guardrail: {label}")), args_body.clone(), None);
+                                    Some(format!("Response blocked by guardrail: {label}")), None, args_body.clone(), None);
                                 return rpc_error(id, -32603, format!("Response blocked by guardrail: {label}")).into_response();
                             }
                             GuardrailOutcome::Flagged(label) => {
                                 warn!(rule = %label, tool = tool_name, "Guardrail flagged MCP tool result");
+                                flag_label = Some(format!("guardrail:{label}"));
                             }
                             GuardrailOutcome::Pass => {}
                         }
@@ -379,7 +383,7 @@ pub async fn mcp_endpoint(
                     if let Err(label) = shield_json(&mut result, &resp_rules, &builtin) {
                         warn!(rule = %label, tool = tool_name, "Content Shield blocked MCP tool result");
                         log_call(&state, &full_name_owned, 400, call_start.elapsed().as_millis() as i64,
-                            Some(format!("Response blocked by Content Shield: {label}")), args_body.clone(), None);
+                            Some(format!("Response blocked by Content Shield: {label}")), None, args_body.clone(), None);
                         return rpc_error(id, -32603, format!("Response blocked by Content Shield: {label}")).into_response();
                     }
                     let resp_body: Option<String> = if state.log_bodies() {
@@ -388,12 +392,12 @@ pub async fn mcp_endpoint(
                         })
                     } else { None };
                     log_call(&state, &full_name_owned, 200, call_start.elapsed().as_millis() as i64,
-                        None, args_body.clone(), resp_body);
+                        None, flag_label.clone(), args_body.clone(), resp_body);
                     rpc_result(id, result).into_response()
                 }
                 Err(e) => {
                     log_call(&state, &full_name_owned, 502, call_start.elapsed().as_millis() as i64,
-                        Some(e.to_string()), args_body.clone(), None);
+                        Some(e.to_string()), None, args_body.clone(), None);
                     rpc_error(id, -32603, e.to_string()).into_response()
                 }
             }

@@ -31,6 +31,19 @@ fn bearer_token(headers: &HeaderMap) -> &str {
         .unwrap_or("")
 }
 
+/// Add baseline security headers to every response. Defense-in-depth for the
+/// API; the static dashboard HTML is served by the reverse proxy, which should
+/// set these too (#4).
+pub async fn security_headers(request: Request, next: Next) -> Response {
+    use axum::http::HeaderValue;
+    let mut resp = next.run(request).await;
+    let h = resp.headers_mut();
+    h.insert("X-Content-Type-Options", HeaderValue::from_static("nosniff"));
+    h.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
+    h.insert("Referrer-Policy", HeaderValue::from_static("no-referrer"));
+    resp
+}
+
 /// Require a valid dashboard session token (issued by `/dashboard/login`) on
 /// the analytics / logs / storage / config endpoints. Without this, those
 /// routes were reachable by anyone — the login was cosmetic.

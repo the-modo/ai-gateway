@@ -9,9 +9,10 @@ import { useTheme, useFontSize, type FontSize } from '@/components/ThemeProvider
 import clsx from 'clsx'
 
 /* ─── Toggle ─────────────────────────────────────────────────────────────── */
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
   return (
-    <button onClick={() => onChange(!checked)}
+    <button type="button" role="switch" aria-checked={checked} aria-label={label}
+      onClick={() => onChange(!checked)}
       className={clsx('relative w-10 h-[22px] rounded-full flex-shrink-0 transition-all duration-300',
         checked ? 'bg-indigo-500' : 'bg-[var(--glass-border)]')}>
       <span className={clsx('absolute top-[3px] w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300',
@@ -171,7 +172,8 @@ export default function SettingsPage() {
   const applySemConfig = (sem: any) => {
     if (!sem) return
     setSemEnabled(sem.enabled ?? true)
-    setSemThreshold(sem.threshold ?? 0.85)
+    // Round to 2dp to drop the f32→f64 widening artifact (e.g. 0.5600000023841858) (#11).
+    setSemThreshold(Math.round((sem.threshold ?? 0.85) * 100) / 100)
     setSemTtl(String(sem.ttl_seconds ?? 3600))
     setSemMax(String(sem.max_entries ?? 10000))
     setSemEntries(sem.entry_count ?? 0)
@@ -267,17 +269,18 @@ export default function SettingsPage() {
       </div>
 
       {/* Server */}
-      <GlassCard title="Server" subtitle="Host, port, and global defaults" icon={<Server size={15} className="text-indigo-400"/>}>
+      <GlassCard title="Server" subtitle="Host, port, and global defaults — set in gateway.toml; restart required" icon={<Server size={15} className="text-indigo-400"/>}>
         <div className="grid grid-cols-2 gap-4">
-          <Input label="Port"                        value={port}          onChange={setPort}          placeholder="4891"/>
-          <Input label="Global timeout (ms)"         value={globalTimeout} onChange={setGlobalTimeout} placeholder="30000"/>
+          <Input label="Port"                value={port}          onChange={setPort}          placeholder="4891" disabled hint="Requires restart — edit gateway.toml"/>
+          <Input label="Global timeout (ms)" value={globalTimeout} onChange={setGlobalTimeout} placeholder="30000" disabled hint="Requires restart — edit gateway.toml"/>
           <div>
             <label className="text-xs t3 block mb-1.5">Log level</label>
-            <select className="glass-input w-full rounded-xl px-3 py-2 text-sm" value={logLevel} onChange={e => setLogLevel(e.target.value)}>
+            <select disabled className="glass-input w-full rounded-xl px-3 py-2 text-sm opacity-50 cursor-not-allowed" value={logLevel} onChange={e => setLogLevel(e.target.value)}>
               {['trace','debug','info','warn','error'].map(l => <option key={l} value={l}>{l}</option>)}
             </select>
+            <p className="text-[10px] t4 mt-1">Set via RUST_LOG / gateway.toml</p>
           </div>
-          <Input label="Metrics port (Prometheus)"   value={metricsPort}   onChange={setMetricsPort}   placeholder="9090"/>
+          <Input label="Metrics port (Prometheus)" value={metricsPort} onChange={setMetricsPort} placeholder="9090" disabled hint="Requires restart — edit gateway.toml"/>
         </div>
       </GlassCard>
 

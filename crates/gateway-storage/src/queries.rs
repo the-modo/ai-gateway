@@ -406,6 +406,9 @@ pub async fn delete_all_requests(pool: &Pool<Any>) -> anyhow::Result<u64> {
     let res = sqlx::query("DELETE FROM requests")
         .execute(pool)
         .await?;
+    // Clear the aggregated rollup too, otherwise analytics charts (which read
+    // metrics_1m) keep showing data after the logs are cleared (#16).
+    let _ = sqlx::query("DELETE FROM metrics_1m").execute(pool).await;
     Ok(res.rows_affected())
 }
 
@@ -428,6 +431,12 @@ pub async fn delete_old_logs(pool: &Pool<Any>, cutoff_ms: i64) -> anyhow::Result
         .bind(cutoff_ms)
         .execute(pool)
         .await?;
+    // Prune the rollup on the same retention boundary so summary (requests) and
+    // charts (metrics_1m) stay consistent (#16). Buckets are epoch-ms aligned.
+    let _ = sqlx::query("DELETE FROM metrics_1m WHERE bucket < ?")
+        .bind(cutoff_ms)
+        .execute(pool)
+        .await;
     Ok(res.rows_affected())
 }
 

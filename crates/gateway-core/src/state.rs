@@ -239,6 +239,13 @@ impl AppState {
         map.get(token).is_some_and(|exp| *exp > now)
     }
 
+    /// Revoke a dashboard session token (logout). No-op if unknown/empty.
+    pub async fn revoke_dashboard_token(&self, token: &str) {
+        if !token.is_empty() {
+            self.dashboard_tokens.write().await.remove(token);
+        }
+    }
+
     pub fn config(&self) -> Arc<GatewayConfig> {
         self.config.borrow().clone()
     }

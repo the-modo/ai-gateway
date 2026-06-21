@@ -2,7 +2,8 @@ use gateway_test_utils::{HarnessBuilder, MockConfig};
 use serde_json::json;
 
 fn last_outgoing_text(h: &gateway_test_utils::TestHarness) -> String {
-    let body = h.mock(0).last_request_body().expect("mock saw a request");
+    let raw = h.mock(0).last_request_body().expect("mock saw a request");
+    let body: serde_json::Value = serde_json::from_str(&raw).expect("request body is JSON");
     // OpenAI-style: messages[].content (string)
     body["messages"]
         .as_array()
