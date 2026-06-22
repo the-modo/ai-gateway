@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useState, useRef, useEffect, useMemo, DragEvent, createContext, useContext } from 'react'
+import { createPortal } from 'react-dom'
 import ReactFlow, {
   Background, MiniMap,
   addEdge, useNodesState, useEdgesState,
@@ -132,6 +133,9 @@ interface EdgeInsertCtxValue {
   onInsert: (edgeId: string, type: string, data: any) => void
   guardrailItems: GuardrailApiRule[]
   shieldItems: ContentShieldApiRule[]
+  /// Right-click on the edge's hit target — opens the canvas-level
+  /// ContextMenu at the cursor with the edge id targeted.
+  onContextMenu?: (edgeId: string, x: number, y: number) => void
 }
 const EdgeInsertCtx = createContext<EdgeInsertCtxValue>({ onInsert: () => {}, guardrailItems: [], shieldItems: [] })
 
@@ -162,9 +166,23 @@ function HoverEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, tar
   return (
     <>
       <path id={id} d={edgePath} style={style as React.CSSProperties} markerEnd={markerEnd as string} fill="none" className="react-flow__edge-path"/>
+      {/* Wide invisible hit target — also forwards right-clicks to ReactFlow
+          so the canvas-wide onEdgeContextMenu handler fires, which is what
+          opens the Remove menu. Without explicit dispatch the parent SVG
+          eats the event before ReactFlow sees it. */}
       <path d={edgePath} fill="none" strokeOpacity={0} strokeWidth={20}
+        style={{ cursor: 'context-menu', pointerEvents: 'stroke' }}
         onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => { if (!menuOpen) setHovered(false) }}/>
+        onMouseLeave={() => { if (!menuOpen) setHovered(false) }}
+        onContextMenu={e => {
+          e.preventDefault()
+          e.stopPropagation()
+          // Synthesize a contextmenu event on the canvas root so the
+          // ReactFlow onEdgeContextMenu binding picks it up with `id` set
+          // to our edge — done by re-dispatching a CustomEvent the canvas
+          // listens for (see EdgeMenuCtx below).
+          ctx.onContextMenu?.(id, e.clientX, e.clientY)
+        }}/>
 
       {label && !showPlus && (
         <EdgeLabelRenderer>
@@ -1487,38 +1505,51 @@ function validateRoute(nodes: Node[], edges: Edge[]): ValidationIssue[] {
 }
 
 /* ─── Right-click context menu ──────────────────────────────────────────── */
+//
+// Rendered through a React portal on document.body so an ancestor with a CSS
+// `transform` (the dashboard's main/sidebar layout has one for the slide-in
+// animation) doesn't pin our `position: fixed` to the wrong containing block,
+// which made the menu drift away from the cursor.
 function ContextMenu({ x, y, target, onRemove, onDuplicate, onClose }: {
   x: number; y: number; target: 'node' | 'edge'
   onRemove: () => void; onDuplicate?: () => void; onClose: () => void
 }) {
   useEffect(() => {
     const close = () => onClose()
-    document.addEventListener('click', close)
+    document.addEventListener('mousedown', close)
     document.addEventListener('contextmenu', close)
     return () => {
-      document.removeEventListener('click', close)
+      document.removeEventListener('mousedown', close)
       document.removeEventListener('contextmenu', close)
     }
   }, [onClose])
-  return (
+  // Keep the menu fully on-screen even when the user right-clicks near the
+  // bottom-right edge of the viewport.
+  const MW = 170, MH = target === 'node' ? 70 : 36
+  const left = Math.min(x, (typeof window !== 'undefined' ? window.innerWidth  : 1024) - MW - 4)
+  const top  = Math.min(y, (typeof window !== 'undefined' ? window.innerHeight : 768)  - MH - 4)
+
+  if (typeof document === 'undefined') return null
+  return createPortal(
     <div
-      onClick={e => e.stopPropagation()}
+      onMouseDown={e => e.stopPropagation()}
       onContextMenu={e => { e.preventDefault(); e.stopPropagation() }}
-      className="fixed z-[300] dark-panel rounded-xl py-1 shadow-2xl ring-1 ring-white/10 min-w-[160px]"
-      style={{ left: x, top: y }}>
+      className="dark-panel rounded-xl py-1 shadow-2xl ring-1 ring-white/10"
+      style={{ position: 'fixed', left, top, minWidth: MW, zIndex: 9999 }}>
       {target === 'node' && onDuplicate && (
         <button
-          onClick={() => { onDuplicate(); onClose() }}
+          onMouseDown={e => { e.stopPropagation(); onDuplicate(); onClose() }}
           className="w-full text-left px-3 py-1.5 text-xs t1 hover:bg-indigo-500/15 flex items-center gap-2">
           <Plus size={11} className="text-indigo-400"/> Duplicate
         </button>
       )}
       <button
-        onClick={() => { onRemove(); onClose() }}
+        onMouseDown={e => { e.stopPropagation(); onRemove(); onClose() }}
         className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/15 flex items-center gap-2">
         <Trash2 size={11}/> Remove
       </button>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -1893,6 +1924,11 @@ function CanvasInner({ initialRouteId, onBack }: { initialRouteId?: string; onBa
     onInsert: insertNodeOnEdge,
     guardrailItems: libraryGuardrails,
     shieldItems: libraryShields,
+    // Edge right-click handler — the wide hit-target inside HoverEdge calls
+    // this directly because ReactFlow's onEdgeContextMenu doesn't see the
+    // event (the hit target's stopPropagation eats it).
+    onContextMenu: (edgeId: string, x: number, y: number) =>
+      setCtxMenu({ x, y, target: 'edge', id: edgeId }),
   }), [insertNodeOnEdge, libraryGuardrails, libraryShields])
 
   const activeRoute = routes.find(r => r.id===activeRouteId)
