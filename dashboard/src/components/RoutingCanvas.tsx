@@ -1736,7 +1736,19 @@ function CanvasInner({ initialRouteId, onBack }: { initialRouteId?: string; onBa
     if (!clearConfirm) return
     const t = setTimeout(() => setClearConfirm(false), 3000); return () => clearTimeout(t)
   }, [clearConfirm])
+  // ─── Save / hydrate race-guard (route disappearing bug) ───────────────
+  // The save useEffect fires immediately on mount with the canvas's
+  // synchronous seed routes (just [SEED_ROUTE]). If the user just created
+  // a new route in the list page and navigated into its canvas, that PUT
+  // *overwrites* the freshly-created route on the gateway because it
+  // isn't in the canvas's local `routes` yet (the hydrate fetch hasn't
+  // run). We gate the save effect on a `hydratedRef` that the hydrate
+  // effect flips true once the GET settles (success OR failure — we
+  // don't want a dead gateway to permanently block saves).
+  const hydratedRef = useRef(false)
+
   useEffect(() => {
+    if (!hydratedRef.current) return        // skip until hydrate settles
     const merged = routes.map(r =>
       r.id === activeRouteId ? { ...r, nodes:[...nodes], edges:[...edges] } : r
     )
@@ -1752,7 +1764,8 @@ function CanvasInner({ initialRouteId, onBack }: { initialRouteId?: string; onBa
   }, [routes, nodes, edges, activeRouteId])
 
   // Hydrate from the gateway on mount so an admin who edited routes in
-  // another browser sees them here.
+  // another browser sees them here. After settling (either success OR
+  // failure) flip hydratedRef so the save effect above is unblocked.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -1767,7 +1780,9 @@ function CanvasInner({ initialRouteId, onBack }: { initialRouteId?: string; onBa
           setNodes(active.nodes)
           setEdges(migrateEdges(active.edges, active.nodes))
         }
-      } catch {}
+      } catch {} finally {
+        if (!cancelled) hydratedRef.current = true
+      }
     })()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
