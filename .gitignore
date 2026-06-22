@@ -8,7 +8,7 @@ dashboard/out/
 # Runtime state
 gateway.db
 gateway.db-*
-logs/
+/logs/
 releases/
 run/
 load/
