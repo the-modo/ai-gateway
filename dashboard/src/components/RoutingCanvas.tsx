@@ -198,11 +198,20 @@ function HoverEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, tar
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => { if (!menuOpen) setHovered(false) }}>
 
-            <button onMouseDown={e => { e.stopPropagation(); if (!menuOpen) setMenuOpen(true) }}
-              className="w-5 h-5 rounded-full flex items-center justify-center text-white"
-              style={{ background:'#6366f1', boxShadow:'0 0 8px rgba(99,102,241,0.6)' }}>
-              <Plus size={9}/>
-            </button>
+            {/* Plus button picks up the arrow's stroke colour so the visual
+                cue ('this button operates on THIS arrow') stays consistent
+                whether the arrow is provider-coloured, condition true/false,
+                rate-limit amber, etc. */}
+            {(() => {
+              const stroke = ((style as React.CSSProperties)?.stroke as string) || '#6366f1'
+              return (
+                <button onMouseDown={e => { e.stopPropagation(); if (!menuOpen) setMenuOpen(true) }}
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-white"
+                  style={{ background: stroke, boxShadow: `0 0 8px ${stroke}99` }}>
+                  <Plus size={9}/>
+                </button>
+              )
+            })()}
 
             {menuOpen && (
               <div className="absolute dark-panel rounded-xl overflow-hidden shadow-2xl min-w-[200px]"
@@ -1510,6 +1519,9 @@ function validateRoute(nodes: Node[], edges: Edge[]): ValidationIssue[] {
 // `transform` (the dashboard's main/sidebar layout has one for the slide-in
 // animation) doesn't pin our `position: fixed` to the wrong containing block,
 // which made the menu drift away from the cursor.
+//
+// Label differs by target: nodes get "Delete", edges get "Delete arrow" so
+// the user knows the action operates on the arrow they right-clicked.
 function ContextMenu({ x, y, target, onRemove, onDuplicate, onClose }: {
   x: number; y: number; target: 'node' | 'edge'
   onRemove: () => void; onDuplicate?: () => void; onClose: () => void
@@ -1546,7 +1558,7 @@ function ContextMenu({ x, y, target, onRemove, onDuplicate, onClose }: {
       <button
         onMouseDown={e => { e.stopPropagation(); onRemove(); onClose() }}
         className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/15 flex items-center gap-2">
-        <Trash2 size={11}/> Remove
+        <Trash2 size={11}/> {target === 'edge' ? 'Delete arrow' : 'Delete'}
       </button>
     </div>,
     document.body
