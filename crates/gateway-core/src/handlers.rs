@@ -1176,19 +1176,95 @@ fn range(from: Option<i64>, to: Option<i64>) -> (i64, i64) {
     (from.unwrap_or(df), to.unwrap_or(dt))
 }
 
-// ─── Routes / MCP routes / disabled vendors (issue #20) ─────────────────────
+// ─── Routes / MCP routes / disabled vendors (issue #20 + fallback) ──────────
 //
 // `/config/routes` and `/config/mcp-routes` store the dashboard's canvas
-// payload verbatim (opaque JSON). The routing engine still keys off
-// `gateway.toml [[routes]]` for actual request dispatch — these endpoints
-// just give the dashboard a place to persist + sync its UI state across
-// browsers, fixing the localStorage-only behaviour from #20.
+// payload verbatim (opaque JSON). On PUT we also DERIVE a `Vec<RouteConfig>`
+// from the blob — provider nodes flagged `data.isFallback: true` become
+// `RouteConfig.fallbacks`, the rest become primaries — and push it into
+// `ProviderRegistry` at runtime so the canvas-edited fallback chain
+// actually fires on a primary 5xx.
 //
 // `/config/providers/disabled` IS enforced: providers whose `kind` matches
 // any entry are skipped by `chat_completions`.
 
 pub async fn routes_config_get(State(state): State<AppState>) -> Json<serde_json::Value> {
     Json(state.routes_json.read().await.clone())
+}
+
+/// Translate the dashboard's canvas blob into engine `RouteConfig`s and push
+/// them into the registry. Exposed so `AppState::new` can hydrate the engine
+/// from the persisted blob at startup, not only at PUT time. Returns
+/// `(applied, skipped)` for the response.
+pub fn apply_blob_to_engine(
+    registry: &gateway_providers::ProviderRegistry,
+    blob: &serde_json::Value,
+) -> (usize, usize) {
+    use gateway_config::{ProviderRoute, RouteConfig, RoutingStrategy};
+
+    let entries = match blob.as_array() {
+        Some(a) => a,
+        None => return (0, 0),
+    };
+
+    let registered: std::collections::HashSet<String> = registry
+        .all()
+        .iter()
+        .map(|p| p.name().to_string())
+        .collect();
+
+    let mut out: Vec<RouteConfig> = Vec::new();
+    let mut skipped = 0usize;
+
+    for r in entries {
+        // Skip disabled routes — operator deliberately turned them off.
+        if r["enabled"].as_bool() == Some(false) { skipped += 1; continue; }
+
+        let mut primaries = Vec::<ProviderRoute>::new();
+        let mut fallbacks = Vec::<String>::new();
+        if let Some(nodes) = r["nodes"].as_array() {
+            for n in nodes {
+                if n["type"].as_str() != Some("provider") { continue; }
+                let name = match n["data"]["name"].as_str() {
+                    Some(s) if !s.is_empty() => s.to_string(),
+                    _ => continue,
+                };
+                if !registered.contains(&name) { continue; }
+                let is_fallback = n["data"]["isFallback"].as_bool().unwrap_or(false);
+                if is_fallback {
+                    if !fallbacks.iter().any(|x| x == &name) { fallbacks.push(name); }
+                } else {
+                    let weight = n["data"]["weight"].as_u64().unwrap_or(100) as u32;
+                    if !primaries.iter().any(|p: &ProviderRoute| p.name == name) {
+                        primaries.push(ProviderRoute { name, weight });
+                    }
+                }
+            }
+        }
+
+        if primaries.is_empty() && fallbacks.is_empty() {
+            skipped += 1;
+            continue;
+        }
+
+        out.push(RouteConfig {
+            id: r["id"].as_str().unwrap_or("route").to_string(),
+            models: vec!["*".to_string()],     // canvas-driven routes match all models
+            strategy: RoutingStrategy::Sequential,
+            providers: primaries,
+            fallbacks,
+            retries: 0,
+            retry_delay_ms: 100,
+            timeout_ms: None,
+            rate_limit: None,
+        });
+    }
+
+    let applied = out.len();
+    if applied > 0 {
+        registry.set_routes(out);
+    }
+    (applied, skipped)
 }
 
 pub async fn routes_config_put(
@@ -1204,7 +1280,9 @@ pub async fn routes_config_put(
             let _ = storage_queries::config_save(pool, "routes", &json).await;
         }
     }
-    Json(json!({ "ok": true }))
+    let (applied, skipped) =
+        apply_blob_to_engine(&state.providers, &*state.routes_json.read().await);
+    Json(json!({ "ok": true, "engine_routes_applied": applied, "skipped": skipped }))
 }
 
 pub async fn mcp_routes_config_get(State(state): State<AppState>) -> Json<serde_json::Value> {

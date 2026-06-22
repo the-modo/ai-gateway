@@ -232,6 +232,12 @@ impl AppState {
             }
             if let Ok(Some(json)) = gateway_storage::queries::config_load(pool, "routes").await {
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json) {
+                    // Hydrate the engine route table from the persisted blob,
+                    // so canvas-edited primaries + fallbacks survive a restart.
+                    let (applied, _) = crate::handlers::apply_blob_to_engine(&providers, &v);
+                    if applied > 0 {
+                        tracing::info!(applied, "Hydrated engine routes from persisted /config/routes blob");
+                    }
                     *routes_json.write().await = v;
                 }
             }

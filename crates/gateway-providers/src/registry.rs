@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use tracing::info;
 
 use gateway_config::{GatewayConfig, ProviderKind, RouteConfig, RoutingStrategy};
@@ -34,7 +34,10 @@ pub struct ProviderRegistry {
     /// so the routing layer can filter out providers whose vendor was disabled
     /// from the dashboard without each Provider implementation exposing a kind.
     kinds:       HashMap<String, String>,
-    routes:      Vec<RouteConfig>,
+    /// Active route table. Wrapped in RwLock so the dashboard can push a new
+    /// `Vec<RouteConfig>` derived from `/config/routes` without rebuilding
+    /// the whole registry.
+    routes:      RwLock<Vec<RouteConfig>>,
     rr_counter:  AtomicUsize,
     latency:     Mutex<HashMap<String, LatencyEma>>,
 }
@@ -86,10 +89,24 @@ impl ProviderRegistry {
         Ok(Self {
             providers,
             kinds,
-            routes:     config.routes.clone(),
+            routes:     RwLock::new(config.routes.clone()),
             rr_counter: AtomicUsize::new(0),
             latency:    Mutex::new(HashMap::new()),
         })
+    }
+
+    /// Replace the active route table at runtime. Used when the dashboard
+    /// pushes a new `/config/routes` blob — the new primaries + fallbacks
+    /// take effect on the next request.
+    pub fn set_routes(&self, routes: Vec<RouteConfig>) {
+        if let Ok(mut guard) = self.routes.write() {
+            *guard = routes;
+        }
+    }
+
+    /// Read-only snapshot of the current route table (for introspection).
+    pub fn routes_snapshot(&self) -> Vec<RouteConfig> {
+        self.routes.read().map(|g| g.clone()).unwrap_or_default()
     }
 
     /// Vendor kind string (lowercase, e.g. "openai") for a configured
@@ -115,22 +132,24 @@ impl ProviderRegistry {
     }
 
     /// Find the best-matching route for a model, falling back to a wildcard route.
-    fn find_route(&self, model: &str) -> Option<&RouteConfig> {
+    /// Clones the matched route so callers don't have to hold the read lock.
+    fn find_route(&self, model: &str) -> Option<RouteConfig> {
+        let routes = self.routes.read().ok()?;
         // Exact / prefix match first
-        if let Some(r) = self.routes.iter().find(|r| {
+        if let Some(r) = routes.iter().find(|r| {
             r.models.iter().any(|p| p != "*" && r.matches_model(model))
         }) {
-            return Some(r);
+            return Some(r.clone());
         }
         // Wildcard fallback
-        self.routes.iter().find(|r| r.models.iter().any(|p| p == "*"))
+        routes.iter().find(|r| r.models.iter().any(|p| p == "*")).cloned()
     }
 
     /// Return the ordered provider list to try for this model request.
     /// Includes both primary (strategy-ordered) and fallback providers.
     pub fn ordered_providers(&self, model: &str) -> Vec<Arc<dyn Provider>> {
         if let Some(route) = self.find_route(model) {
-            self.apply_strategy(route)
+            self.apply_strategy(&route)
         } else {
             // No route configured: use any provider that supports this model
             self.providers.values()

@@ -23,7 +23,7 @@ import type { GuardrailApiRule, ContentShieldApiRule, GatewayProviderInfo } from
 
 /* ─── Interfaces ─────────────────────────────────────────────────────────── */
 interface RequestData  { description: string }
-interface ProviderData { vendorId: string; name: string; weight: number; modelExpr?: string; timeout?: number }
+interface ProviderData { vendorId: string; name: string; weight: number; modelExpr?: string; timeout?: number; isFallback?: boolean }
 interface ResponseData {
   type: 'success' | 'error'
   headers?: Array<{ key: string; value: string }>
@@ -306,13 +306,20 @@ function ProviderNode({ id, data, selected }: NodeProps<ProviderData>) {
   const v = VENDORS.find(x => x.id === data.vendorId)
   const { activeId } = useContext(TestAnimCtx)
   if (!v) return null
-  const isActive = activeId === id
+  const isActive  = activeId === id
+  const isFallback = data.isFallback === true
+  // Fallback providers wear an amber ring so they're visually distinct from
+  // primaries on the canvas — and the engine knows the same thing from
+  // data.isFallback when /config/routes is PUT.
+  const fallbackRing = isFallback ? '#f59e0b' : v.ring
   const glowStyle: React.CSSProperties = isActive
     ? { boxShadow:`0 0 0 2px ${v.color}bb, 0 0 28px ${v.color}88, 0 0 56px ${v.color}44`, transform:'scale(1.04)' }
-    : {}
+    : isFallback
+      ? { boxShadow:`0 0 0 1px rgba(245,158,11,0.55), inset 0 0 0 1px rgba(245,158,11,0.25)` }
+      : {}
   return (
     <div className={clsx('px-3 py-3 rounded-2xl min-w-[200px] canvas-node-anim', selected && 'outline outline-2 outline-offset-2')}
-      style={{ background:v.bg, backdropFilter:'blur(16px)', border:`1px solid ${v.ring}`, outlineColor:v.color, ...glowStyle }}>
+      style={{ background:v.bg, backdropFilter:'blur(16px)', border:`1px solid ${fallbackRing}`, outlineColor:v.color, ...glowStyle }}>
       <Handle type="target" position={Position.Left}  className="!border-0 !w-3 !h-3" style={{ background:v.color }}/>
       <Handle type="source" position={Position.Right} className="!border-0 !w-3 !h-3" style={{ background:v.color }}/>
       <div className="flex items-center gap-2.5 mb-1.5">
@@ -321,7 +328,15 @@ function ProviderNode({ id, data, selected }: NodeProps<ProviderData>) {
           <VendorIcon icon={v.icon} name={v.name} size={18}/>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold leading-tight truncate" style={{ color:v.color }}>{v.name}</div>
+          <div className="flex items-center gap-1.5">
+            <div className="text-[11px] font-semibold leading-tight truncate" style={{ color:v.color }}>{v.name}</div>
+            {isFallback && (
+              <span className="text-[8px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded"
+                style={{ background:'rgba(245,158,11,0.18)', color:'#fbbf24', border:'1px solid rgba(245,158,11,0.4)' }}>
+                Fallback
+              </span>
+            )}
+          </div>
           <div className="text-[9px] truncate" style={{ color:'var(--t3)' }}>{data.name}</div>
         </div>
         <div className="text-[10px] font-bold font-mono flex-shrink-0 px-1.5 py-0.5 rounded-lg"
@@ -1063,6 +1078,32 @@ function ConfigPanel({ node, onChange, onDelete, onClose }: { node:Node; onChang
           <input type="number" min="0" className="glass-input w-full rounded-xl px-3 py-2 text-sm"
             value={d.timeout ?? ''} placeholder="30000"
             onChange={e => onChange(node.id, { ...d, timeout:+e.target.value||undefined })}/>
+        </Field>
+
+        {/* Fallback toggle — flipping this and saving the route makes the
+            gateway treat the provider as a backup: it's only tried if every
+            primary in the route fails. Wired through /config/routes →
+            ProviderRegistry.set_routes at PUT time. */}
+        <Field label="Role">
+          <div className="flex gap-2">
+            <button onClick={() => onChange(node.id, { ...d, isFallback:false })}
+              className={clsx('flex-1 py-1.5 rounded-xl text-xs font-medium transition-all',
+                !d.isFallback
+                  ? 'bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-500/30'
+                  : 'glass t2 hover:t1')}>
+              Primary
+            </button>
+            <button onClick={() => onChange(node.id, { ...d, isFallback:true })}
+              className={clsx('flex-1 py-1.5 rounded-xl text-xs font-medium transition-all',
+                d.isFallback
+                  ? 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30'
+                  : 'glass t2 hover:t1')}>
+              Fallback
+            </button>
+          </div>
+          <p className="text-[9px] t4 mt-1">
+            Fallbacks are only tried after every primary in this route fails (5xx or timeout).
+          </p>
         </Field>
 
         <div className="glass rounded-xl px-3 py-2.5 text-[9px] t4">
