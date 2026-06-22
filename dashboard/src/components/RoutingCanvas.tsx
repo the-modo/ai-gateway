@@ -536,7 +536,19 @@ const nodeTypes = { request:RequestNode, provider:ProviderNode, condition:Condit
 const edgeTypes = { hover: HoverEdge }
 
 /* ─── Panel wrapper ──────────────────────────────────────────────────────── */
-function PanelWrap({ title, color, children, onClose, onDelete }: any) {
+function PanelWrap({ title, color, children, onClose, onDelete, onSave }: any) {
+  const [saved, setSaved] = useState(false)
+  const handleSave = async () => {
+    // The canvas already auto-persists on every change (useEffect → PUT
+    // /config/routes), so this is largely a confirmation UI. We still
+    // re-trigger a save so the user gets explicit feedback that their
+    // edit reached the gateway.
+    if (onSave) {
+      try { await onSave() } catch {}
+    }
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1800)
+  }
   return (
     <div className="absolute right-3 top-3 bottom-3 w-72 dark-panel rounded-2xl flex flex-col z-20 overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 border-b bd flex-shrink-0">
@@ -545,7 +557,14 @@ function PanelWrap({ title, color, children, onClose, onDelete }: any) {
         <button onClick={onClose} className="t3 hover:t1 transition-colors"><X size={14}/></button>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">{children}</div>
-      <div className="px-4 py-3 border-t bd flex-shrink-0">
+      <div className="px-4 py-3 border-t bd flex-shrink-0 space-y-2">
+        <button onClick={handleSave}
+          className={clsx('flex items-center gap-1.5 text-xs w-full justify-center py-2 rounded-xl font-medium transition-all',
+            saved
+              ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
+              : 'bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-500/30 hover:bg-indigo-500/25')}>
+          {saved ? <><CheckCircle2 size={11}/> Saved</> : <><Save size={11}/> Save</>}
+        </button>
         <button onClick={onDelete}
           className="flex items-center gap-1.5 text-xs text-red-400/70 hover:text-red-400 transition-colors w-full justify-center">
           <Trash2 size={11}/> Remove node
@@ -611,7 +630,7 @@ const KIND_DEFAULTS: Record<string, Partial<ConditionItem>> = {
   requests: { expr:'request.total_count', op:'greater_than', value:'1000' },
 }
 
-function ConditionPanel({ node, onChange, onDelete, onClose }: any) {
+function ConditionPanel({ node, onChange, onDelete, onClose, onSave }: any) {
   const d: ConditionData = node.data
   const conditions: ConditionItem[] = d.conditions ?? []
 
@@ -627,7 +646,7 @@ function ConditionPanel({ node, onChange, onDelete, onClose }: any) {
     updateCond(id, { kind, ...KIND_DEFAULTS[kind] })
 
   return (
-    <PanelWrap title="IF Condition" color="#a855f7" onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }}>
+    <PanelWrap title="IF Condition" color="#a855f7" onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }} onSave={onSave}>
 
       {/* Condition cards */}
       <div className="space-y-3">
@@ -752,12 +771,12 @@ function ConditionPanel({ node, onChange, onDelete, onClose }: any) {
 }
 
 /* ─── Guardrail panel ────────────────────────────────────────────────────── */
-function GuardrailPanel({ node, onChange, onDelete, onClose }: any) {
+function GuardrailPanel({ node, onChange, onDelete, onClose, onSave }: any) {
   const d: GuardrailData = node.data
   const isBlock = d.action === 'block'
   const color = isBlock ? '#ef4444' : '#f59e0b'
   return (
-    <PanelWrap title="Guardrail" color={color} onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }}>
+    <PanelWrap title="Guardrail" color={color} onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }} onSave={onSave}>
       <Field label="Rule name">
         <input className="glass-input w-full rounded-xl px-3 py-2 text-sm"
           value={d.label} placeholder="e.g. No violence"
@@ -801,7 +820,7 @@ function GuardrailPanel({ node, onChange, onDelete, onClose }: any) {
 }
 
 /* ─── Content Shield panel ───────────────────────────────────────────────── */
-function ContentShieldPanel({ node, onChange, onDelete, onClose }: any) {
+function ContentShieldPanel({ node, onChange, onDelete, onClose, onSave }: any) {
   const d: ContentShieldData = node.data
   const presets = [
     { label:'[REDACTED]', value:'[REDACTED]', desc:'fixed label' },
@@ -809,7 +828,7 @@ function ContentShieldPanel({ node, onChange, onDelete, onClose }: any) {
     { label:'*…',         value:'*',          desc:'repeat * per char' },
   ]
   return (
-    <PanelWrap title="Content Shield" color="#818cf8" onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }}>
+    <PanelWrap title="Content Shield" color="#818cf8" onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }} onSave={onSave}>
       <Field label="Node label">
         <input className="glass-input w-full rounded-xl px-3 py-2 text-sm"
           value={d.label} placeholder="e.g. Mask emails"
@@ -1024,14 +1043,14 @@ function TestTracePanel({ trace, testResult, responseBody, onClose }: {
 }
 
 /* ─── Config panel ───────────────────────────────────────────────────────── */
-function ConfigPanel({ node, onChange, onDelete, onClose }: { node:Node; onChange:(id:string,data:any)=>void; onDelete:(id:string)=>void; onClose:()=>void }) {
+function ConfigPanel({ node, onChange, onDelete, onClose, onSave }: { node:Node; onChange:(id:string,data:any)=>void; onDelete:(id:string)=>void; onClose:()=>void; onSave?:()=>Promise<void> }) {
   const d = node.data
-  if (node.type === 'condition') return <ConditionPanel node={node} onChange={onChange} onDelete={onDelete} onClose={onClose}/>
-  if (node.type === 'guardrail') return <GuardrailPanel node={node} onChange={onChange} onDelete={onDelete} onClose={onClose}/>
-  if (node.type === 'contentShield') return <ContentShieldPanel node={node} onChange={onChange} onDelete={onDelete} onClose={onClose}/>
+  if (node.type === 'condition') return <ConditionPanel node={node} onChange={onChange} onDelete={onDelete} onClose={onClose} onSave={onSave}/>
+  if (node.type === 'guardrail') return <GuardrailPanel node={node} onChange={onChange} onDelete={onDelete} onClose={onClose} onSave={onSave}/>
+  if (node.type === 'contentShield') return <ContentShieldPanel node={node} onChange={onChange} onDelete={onDelete} onClose={onClose} onSave={onSave}/>
 
   if (node.type === 'request') return (
-    <PanelWrap title="Request" color="#6366f1" onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }}>
+    <PanelWrap title="Request" color="#6366f1" onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }} onSave={onSave}>
       <Field label="Description">
         <input className="glass-input w-full rounded-xl px-3 py-2 text-sm"
           value={d.description} placeholder="e.g. All production traffic"
@@ -1043,7 +1062,7 @@ function ConfigPanel({ node, onChange, onDelete, onClose }: { node:Node; onChang
   if (node.type === 'provider') {
     const v = VENDORS.find(x => x.id === d.vendorId)
     return (
-      <PanelWrap title={v?.name ?? 'Provider'} color={v?.color ?? '#888'} onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }}>
+      <PanelWrap title={v?.name ?? 'Provider'} color={v?.color ?? '#888'} onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }} onSave={onSave}>
         <div className="flex items-center gap-3 p-3 rounded-xl glass mb-1">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ background:v?.bg, border:`1px solid ${v?.ring}` }}>
@@ -1122,7 +1141,7 @@ function ConfigPanel({ node, onChange, onDelete, onClose }: { node:Node; onChang
     const setH = (i:number,k:string,v:string) => updH(headers.map((h,idx) => idx===i?{key:k,value:v}:h))
     const setP = (i:number,k:string,v:string) => updP(payload.map((p,idx) => idx===i?{key:k,value:v}:p))
     return (
-      <PanelWrap title="Response" color={c} onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }}>
+      <PanelWrap title="Response" color={c} onClose={onClose} onDelete={() => { onDelete(node.id); onClose() }} onSave={onSave}>
         <Field label="Type">
           <div className="flex gap-2">
             {(['success','error'] as const).map(t => (
@@ -1387,6 +1406,122 @@ function loadRoutes(): RouteConfig[] {
   } catch { return INITIAL_ROUTES }
 }
 
+/* ─── Validation ─────────────────────────────────────────────────────────── */
+interface ValidationIssue { severity: 'error' | 'warn'; message: string; nodeId?: string }
+
+/**
+ * Static analysis of a route's nodes + edges. Catches the obvious shape
+ * errors *before* the user tries to test or save:
+ *  - exactly one Request node
+ *  - both branches of every Condition node are wired
+ *  - every node is reachable from the Request entry point
+ *  - non-leaf nodes (provider/condition/guardrail/shield) eventually reach a
+ *    Response node
+ */
+function validateRoute(nodes: Node[], edges: Edge[]): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  const requests = nodes.filter(n => n.type === 'request')
+  if (requests.length === 0) {
+    issues.push({ severity: 'error', message: 'Route must have one Request node.' })
+  } else if (requests.length > 1) {
+    issues.push({ severity: 'error',
+      message: `Only one Request node allowed per route — you have ${requests.length}.` })
+  }
+  // Condition branches
+  for (const c of nodes.filter(n => n.type === 'condition')) {
+    const outs = edges.filter(e => e.source === c.id).map(e => e.sourceHandle)
+    if (!outs.includes('true'))
+      issues.push({ severity: 'warn', nodeId: c.id, message: `IF Condition "${c.id}" has nothing wired to its TRUE branch.` })
+    if (!outs.includes('false'))
+      issues.push({ severity: 'warn', nodeId: c.id, message: `IF Condition "${c.id}" has nothing wired to its FALSE branch.` })
+  }
+  // Reachability from the first Request node
+  if (requests.length > 0) {
+    const reachable = new Set<string>([requests[0].id])
+    let changed = true
+    while (changed) {
+      changed = false
+      for (const e of edges) {
+        if (reachable.has(e.source) && !reachable.has(e.target)) {
+          reachable.add(e.target); changed = true
+        }
+      }
+    }
+    const unreachable = nodes.filter(n => !reachable.has(n.id) && n.id !== requests[0].id)
+    if (unreachable.length > 0) {
+      issues.push({ severity: 'warn',
+        message: `Unreachable from Request: ${unreachable.map(n => n.data?.name ?? n.id).slice(0, 4).join(', ')}${unreachable.length > 4 ? ` +${unreachable.length - 4} more` : ''}.` })
+    }
+    // Reachability to a Response node from each non-leaf node
+    const responses = nodes.filter(n => n.type === 'response')
+    if (responses.length === 0) {
+      issues.push({ severity: 'warn', message: 'Route has no Response node — requests have nowhere to terminate.' })
+    } else {
+      // Reverse adjacency
+      const incoming = new Map<string, string[]>()
+      for (const e of edges) {
+        const arr = incoming.get(e.target) ?? []
+        arr.push(e.source); incoming.set(e.target, arr)
+      }
+      const reachesResponse = new Set<string>(responses.map(n => n.id))
+      let changed2 = true
+      while (changed2) {
+        changed2 = false
+        for (const [t, srcs] of incoming) {
+          if (!reachesResponse.has(t)) continue
+          for (const s of srcs) {
+            if (!reachesResponse.has(s)) { reachesResponse.add(s); changed2 = true }
+          }
+        }
+      }
+      for (const n of nodes) {
+        if (n.type === 'response') continue
+        if (!reachesResponse.has(n.id) && reachable.has(n.id)) {
+          issues.push({ severity: 'warn', nodeId: n.id,
+            message: `${n.type} "${n.data?.name ?? n.id}" doesn't terminate at a Response node.` })
+        }
+      }
+    }
+  }
+  return issues
+}
+
+/* ─── Right-click context menu ──────────────────────────────────────────── */
+function ContextMenu({ x, y, target, onRemove, onDuplicate, onClose }: {
+  x: number; y: number; target: 'node' | 'edge'
+  onRemove: () => void; onDuplicate?: () => void; onClose: () => void
+}) {
+  useEffect(() => {
+    const close = () => onClose()
+    document.addEventListener('click', close)
+    document.addEventListener('contextmenu', close)
+    return () => {
+      document.removeEventListener('click', close)
+      document.removeEventListener('contextmenu', close)
+    }
+  }, [onClose])
+  return (
+    <div
+      onClick={e => e.stopPropagation()}
+      onContextMenu={e => { e.preventDefault(); e.stopPropagation() }}
+      className="fixed z-[300] dark-panel rounded-xl py-1 shadow-2xl ring-1 ring-white/10 min-w-[160px]"
+      style={{ left: x, top: y }}>
+      {target === 'node' && onDuplicate && (
+        <button
+          onClick={() => { onDuplicate(); onClose() }}
+          className="w-full text-left px-3 py-1.5 text-xs t1 hover:bg-indigo-500/15 flex items-center gap-2">
+          <Plus size={11} className="text-indigo-400"/> Duplicate
+        </button>
+      )}
+      <button
+        onClick={() => { onRemove(); onClose() }}
+        className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/15 flex items-center gap-2">
+        <Trash2 size={11}/> Remove
+      </button>
+    </div>
+  )
+}
+
 /* ─── Canvas inner ───────────────────────────────────────────────────────── */
 function CanvasInner({ initialRouteId, onBack }: { initialRouteId?: string; onBack?: () => void }) {
   const [routes, setRoutes]               = useState<RouteConfig[]>(loadRoutes)
@@ -1416,6 +1551,9 @@ function CanvasInner({ initialRouteId, onBack }: { initialRouteId?: string; onBa
     try { setDisabledVendorIds(JSON.parse(localStorage.getItem('gw-disabled-vendors') ?? '[]')) } catch {}
   }, [])
   const [shieldsOpen, setShieldsOpen]       = useState(false)
+  // Right-click context menu state (issue: canvas UX). Tracks viewport-relative
+  // coords + the (node | edge) we right-clicked.
+  const [ctxMenu, setCtxMenu] = useState<null | { x:number; y:number; target:'node'|'edge'; id:string }>(null)
   const { project, zoomIn, zoomOut, fitView } = useReactFlow()
 
   const runAnimation = useCallback(async (ns: Node[], es: Edge[], requestBody: string): Promise<TraceEntry[]> => {
@@ -1662,6 +1800,37 @@ function CanvasInner({ initialRouteId, onBack }: { initialRouteId?: string; onBa
   const deleteNode = (id: string) => {
     setNodes(ns => ns.filter(n => n.id!==id)); setEdges(es => es.filter(e => e.source!==id && e.target!==id))
   }
+
+  const deleteEdge = (id: string) => setEdges(es => es.filter(e => e.id !== id))
+
+  /// Clone the right-clicked node next to itself; new id, same type/data,
+  /// position offset by +40,+40 so it doesn't overlap.
+  const duplicateNode = (id: string) => {
+    const n = nodes.find(x => x.id === id)
+    if (!n) return
+    const fresh = {
+      ...n,
+      id: `${n.type}-${++idRef.current}`,
+      position: { x: n.position.x + 40, y: n.position.y + 40 },
+      data: JSON.parse(JSON.stringify(n.data)),  // deep-clone so editing the copy doesn't mutate the original
+      selected: false,
+    }
+    setNodes(ns => [...ns, fresh])
+  }
+
+  /// Imperative save — flushes the current canvas to /config/routes RIGHT
+  /// NOW (the useEffect also persists on every change; this is the explicit
+  /// "Save" affordance per properties panel).
+  const explicitSave = useCallback(async () => {
+    const merged = routes.map(r =>
+      r.id === activeRouteId ? { ...r, nodes:[...nodes], edges:[...edges] } : r
+    )
+    await fetch(`${getGatewayBase()}/config/routes`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(merged),
+    })
+  }, [routes, nodes, edges, activeRouteId])
 
   const addAt = (type: string, data: any) => {
     const bounds = canvasRef.current?.getBoundingClientRect()
@@ -1973,7 +2142,15 @@ function CanvasInner({ initialRouteId, onBack }: { initialRouteId?: string; onBa
             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={(_,n) => setSelectedId(n.id)}
-            onPaneClick={() => setSelectedId(null)}
+            onPaneClick={() => { setSelectedId(null); setCtxMenu(null) }}
+            onNodeContextMenu={(e, n) => {
+              e.preventDefault()
+              setCtxMenu({ x: e.clientX, y: e.clientY, target: 'node', id: n.id })
+            }}
+            onEdgeContextMenu={(e, ed) => {
+              e.preventDefault()
+              setCtxMenu({ x: e.clientX, y: e.clientY, target: 'edge', id: ed.id })
+            }}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView fitViewOptions={{ padding:0.3 }}
@@ -1985,7 +2162,55 @@ function CanvasInner({ initialRouteId, onBack }: { initialRouteId?: string; onBa
               nodeColor={n => { if (n.type==='request') return '#6366f1'; if (n.type==='condition') return '#a855f7'; if (n.type==='response') return n.data.type==='success'?'#10b981':'#ef4444'; return VENDORS.find(v=>v.id===n.data.vendorId)?.color??'#888' }}
               maskColor="rgba(0,0,0,0.25)"/>
           </ReactFlow>
-          {selectedNode && <ConfigPanel node={selectedNode} onChange={updateNode} onDelete={deleteNode} onClose={() => setSelectedId(null)}/>}
+
+          {/* Validation banner — static analysis of the current canvas (single
+              Request node, condition handles wired, reachability, terminates
+              at a Response). Errors block, warnings nudge. */}
+          {(() => {
+            const issues = validateRoute(nodes, edges)
+            if (issues.length === 0) return null
+            const errs  = issues.filter(i => i.severity === 'error')
+            const warns = issues.filter(i => i.severity === 'warn')
+            const bg = errs.length ? 'rgba(239,68,68,0.10)' : 'rgba(245,158,11,0.10)'
+            const ring = errs.length ? 'rgba(239,68,68,0.30)' : 'rgba(245,158,11,0.30)'
+            const tone = errs.length ? 'text-red-300' : 'text-amber-300'
+            return (
+              <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 max-w-[60%]"
+                style={{ background: bg, border: `1px solid ${ring}` }}
+                onContextMenu={e => e.preventDefault()}>
+                <div className="rounded-2xl px-3 py-2 text-[11px] flex items-start gap-2">
+                  <AlertTriangle size={12} className={clsx('mt-0.5 flex-shrink-0', tone)}/>
+                  <div className="space-y-0.5 min-w-0">
+                    <div className={clsx('font-semibold', tone)}>
+                      {errs.length > 0 ? `${errs.length} error${errs.length === 1 ? '' : 's'}` : ''}
+                      {errs.length > 0 && warns.length > 0 ? ' · ' : ''}
+                      {warns.length > 0 ? `${warns.length} warning${warns.length === 1 ? '' : 's'}` : ''}
+                    </div>
+                    {issues.slice(0, 4).map((i, idx) => (
+                      <div key={idx} className="t2 truncate">{i.message}</div>
+                    ))}
+                    {issues.length > 4 && (
+                      <div className="t4">+ {issues.length - 4} more</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
+          {ctxMenu && (
+            <ContextMenu
+              x={ctxMenu.x} y={ctxMenu.y} target={ctxMenu.target}
+              onClose={() => setCtxMenu(null)}
+              onRemove={() => {
+                if (ctxMenu.target === 'node') deleteNode(ctxMenu.id)
+                else deleteEdge(ctxMenu.id)
+                if (selectedId === ctxMenu.id) setSelectedId(null)
+              }}
+              onDuplicate={ctxMenu.target === 'node' ? () => duplicateNode(ctxMenu.id) : undefined}/>
+          )}
+
+          {selectedNode && <ConfigPanel node={selectedNode} onChange={updateNode} onDelete={deleteNode} onClose={() => setSelectedId(null)} onSave={explicitSave}/>}
           {testResult && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 glass rounded-2xl px-5 py-3 flex items-center gap-3 shadow-2xl ring-1 ring-white/10 w-max max-w-[85%]">
               {testResult.ok
