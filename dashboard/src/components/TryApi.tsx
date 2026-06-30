@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { KeyRound, Play, Terminal, Check, Copy, RefreshCw, FileText, Zap, Code2, Clock, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 import { getGatewayBase } from '@/lib/config'
@@ -106,9 +106,10 @@ export function TrySection({ keys }: { keys: GatewayKey[] }) {
         )}
       </div>
 
-      <div className="grid grid-cols-[1fr_1fr] gap-4">
+      <Splitter direction="horizontal" storageKey="playground:hsplit" initial={50} min={20} max={80}
+        style={{ height: 'min(calc(100vh - 240px), 720px)' }}>
         {/* Left: body + extra headers + send */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 h-full min-h-0">
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[10px] t2 font-semibold uppercase tracking-wide">Request body</label>
@@ -157,21 +158,22 @@ export function TrySection({ keys }: { keys: GatewayKey[] }) {
           </button>
         </div>
 
-        {/* Right: curl preview + response */}
-        <div className="flex flex-col gap-3">
-          <div className="glass rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b bd">
+        {/* Right: curl preview + response — vertically resizable */}
+        <Splitter direction="vertical" storageKey="playground:vsplit" initial={30} min={15} max={70}
+          className="h-full min-h-0">
+          <div className="glass rounded-xl overflow-hidden h-full flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b bd flex-shrink-0">
               <div className="flex items-center gap-1.5">
                 <Code2 size={11} className="t3"/>
                 <span className="text-[10px] t3 font-medium">curl</span>
               </div>
               <CopyBtn text={curlCmd}/>
             </div>
-            <pre className="px-4 py-3 text-[10px] font-mono t2 overflow-x-auto leading-relaxed whitespace-pre max-h-36 overflow-y-auto" suppressHydrationWarning>{curlCmd}</pre>
+            <pre className="px-4 py-3 text-[10px] font-mono t2 overflow-auto leading-relaxed whitespace-pre flex-1" suppressHydrationWarning>{curlCmd}</pre>
           </div>
 
-          <div className="glass rounded-xl overflow-hidden flex-1">
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b bd">
+          <div className="glass rounded-xl overflow-hidden h-full flex flex-col">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b bd flex-shrink-0">
               <span className="text-[10px] t3 font-medium">Response</span>
               {latency !== null && (
                 <>
@@ -184,15 +186,15 @@ export function TrySection({ keys }: { keys: GatewayKey[] }) {
                 </>
               )}
             </div>
-            <div className="min-h-[200px] px-4 py-3">
+            <div className="flex-1 overflow-auto px-4 py-3 min-h-0">
               {!response && !error && !loading && (
-                <div className="flex flex-col items-center justify-center h-40 t4">
+                <div className="flex flex-col items-center justify-center h-full t4">
                   <Terminal size={20} className="mb-2"/>
                   <span className="text-xs">Hit "Send request" to see the response</span>
                 </div>
               )}
               {loading && (
-                <div className="flex flex-col items-center justify-center h-40 t3">
+                <div className="flex flex-col items-center justify-center h-full t3">
                   <RefreshCw size={18} className="animate-spin mb-2 text-indigo-400"/>
                   <span className="text-xs">Waiting for response…</span>
                 </div>
@@ -210,14 +212,109 @@ export function TrySection({ keys }: { keys: GatewayKey[] }) {
                       {response.choices[0].message.content}
                     </div>
                   )}
-                  <pre className="text-[10px] font-mono t2 overflow-x-auto max-h-44 overflow-y-auto">
+                  <pre className="text-[10px] font-mono t2 overflow-auto">
                     {JSON.stringify(response, null, 2)}
                   </pre>
                 </div>
               )}
             </div>
           </div>
-        </div>
+        </Splitter>
+      </Splitter>
+    </div>
+  )
+}
+
+/* ─── Resizable splitter ──────────────────────────────────────────────────
+   Drag the divider between two children to resize. Direction='horizontal'
+   resizes width, 'vertical' resizes height. Position is stored as a
+   percent of the parent and (optionally) persisted to localStorage. */
+function Splitter({
+  direction, children, initial = 50, min = 15, max = 85,
+  storageKey, className, style,
+}: {
+  direction: 'horizontal' | 'vertical'
+  children: [React.ReactNode, React.ReactNode]
+  initial?: number; min?: number; max?: number
+  storageKey?: string
+  className?: string
+  style?: React.CSSProperties
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pct, setPct] = useState<number>(initial)
+  // Hydrate from localStorage on mount (avoids SSR mismatch).
+  useEffect(() => {
+    if (!storageKey || typeof window === 'undefined') return
+    try {
+      const raw = localStorage.getItem(storageKey)
+      if (raw == null) return
+      const n = Number(raw)
+      if (Number.isFinite(n) && n >= min && n <= max) setPct(n)
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const horizontal = direction === 'horizontal'
+    const move = (ev: MouseEvent) => {
+      const rect = ref.current?.getBoundingClientRect()
+      if (!rect) return
+      const raw = horizontal
+        ? ((ev.clientX - rect.left) / rect.width) * 100
+        : ((ev.clientY - rect.top)  / rect.height) * 100
+      const clamped = Math.max(min, Math.min(max, raw))
+      setPct(clamped)
+      if (storageKey) {
+        try { localStorage.setItem(storageKey, String(clamped)) } catch {}
+      }
+    }
+    const up = () => {
+      document.removeEventListener('mousemove', move)
+      document.removeEventListener('mouseup', up)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', up)
+    document.body.style.cursor = horizontal ? 'col-resize' : 'row-resize'
+    document.body.style.userSelect = 'none'
+  }
+
+  const horizontal = direction === 'horizontal'
+  return (
+    <div
+      ref={ref}
+      className={clsx(horizontal ? 'flex flex-row' : 'flex flex-col', className)}
+      style={{ minWidth: 0, minHeight: 0, ...style }}>
+      <div
+        className="overflow-hidden"
+        style={horizontal ? { width: `${pct}%`, minWidth: 0 } : { height: `${pct}%`, minHeight: 0 }}>
+        {children[0]}
+      </div>
+      <div
+        onMouseDown={startDrag}
+        title="Drag to resize"
+        className={clsx(
+          'group relative flex-shrink-0 transition-colors',
+          horizontal
+            ? 'w-2 cursor-col-resize hover:bg-indigo-500/25'
+            : 'h-2 cursor-row-resize hover:bg-indigo-500/25',
+        )}
+        style={{ touchAction: 'none' }}>
+        {/* Grab handle indicator that pops on hover. */}
+        <div
+          className={clsx(
+            'absolute opacity-0 group-hover:opacity-100 transition-opacity rounded-full bg-indigo-400/70',
+            horizontal
+              ? 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8'
+              : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1 w-8',
+          )}/>
+      </div>
+      <div
+        className="overflow-hidden"
+        style={horizontal ? { width: `${100 - pct}%`, minWidth: 0 } : { height: `${100 - pct}%`, minHeight: 0 }}>
+        {children[1]}
       </div>
     </div>
   )
